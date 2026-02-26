@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Bulk Asset Inspections</title>
+
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+
+<link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css" />
+
+<style>
+html, body, #viewDiv {
+  padding: 0;
+  margin: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+#panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 340px;
+  height: 100%;
+  background: white;
+  box-shadow: -2px 0 8px rgba(0,0,0,.3);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+#panel h2 {
+  margin: 0 0 10px 0;
+}
+
+label {
+  font-size: 13px;
+}
+
+select, input, button {
+  width: 100%;
+  padding: 6px;
+  margin-bottom: 8px;
+}
+
+button {
+  background: #0079c1;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #005a87;
+}
+
+#selectionCount {
+  font-weight: bold;
+  margin: 10px 0;
+}
+
+#toolbar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+}
+
+#toolbar button {
+  width: auto;
+  margin-right: 5px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="viewDiv"></div>
+
+<div id="toolbar">
+  <button id="drawBtn">Draw Selection</button>
+  <button id="clearBtn">Clear</button>
+</div>
+
+<div id="panel">
+  <h2>Bulk Inspection</h2>
+
+  <div id="selectionCount">0 assets selected</div>
+
+  <label>Date</label>
+  <input type="date" id="inspectionDate" required>
+
+  <label>Condition Score</label>
+  <select id="conditionScore">
+    <option value="">Select</option>
+    <option value="1">1 - Very Poor</option>
+    <option value="2">2 - Poor</option>
+    <option value="3">3 - OK</option>
+    <option value="4">4 - Good</option>
+    <option value="5">5 - Very Good</option>
+  </select>
+
+  <label>Requires Maintenance</label>
+  <select id="requiresMaintenance">
+    <option value="">Select</option>
+    <option value="Yes">Yes</option>
+    <option value="No">No</option>
+  </select>
+
+  <button id="submitBtn">Add Inspections</button>
+</div>
+
+<script src="https://js.arcgis.com/4.28"></script>
+<script>
+require([
+  "esri/identity/OAuthInfo",
+  "esri/identity/IdentityManager",
+  "esri/WebMap",
+  "esri/views/MapView",
+  "esri/layers/FeatureLayer",
+  "esri/widgets/Sketch/SketchViewModel",
+  "esri/geometry/geometryEngine"
+], function (
+  OAuthInfo, esriId, WebMap, MapView,
+  FeatureLayer, SketchViewModel, geometryEngine
+) {
+
+  /* ===================== CONFIG ===================== */
+  const CLIENT_ID = "YOUR_OAUTH_CLIENT_ID";
+  const WEBMAP_ID = "YOUR_WEBMAP_ITEM_ID";
+  const ASSET_LAYER_ID = 4;
+  const INSPECTION_LAYER_ID = 5;
+  /* ================================================= */
+
+  const oauthInfo = new OAuthInfo({
+    appId: CLIENT_ID,
+    portalUrl: "https://www.arcgis.com",
+    popup: false
+  });
+
+  esriId.registerOAuthInfos([oauthInfo]);
+
+  esriId.checkSignInStatus(oauthInfo.portalUrl + "/sharing")
+    .catch(() => esriId.getCredential(oauthInfo.portalUrl + "/sharing"))
+    .then(init);
+
+  let view, assetLayer, inspectionLayer;
+  let selectedGlobalIDs = [];
+
+  function init() {
+    const webmap = new WebMap({
+      portalItem: { id: WEBMAP_ID }
+    });
+
+    view = new MapView({
+      container: "viewDiv",
+      map: webmap
+    });
+
+    webmap.when(() => {
+      assetLayer = webmap.layers.find(l => l.layerId === ASSET_LAYER_ID);
+      inspectionLayer = webmap.layers.find(l => l.layerId === INSPECTION_LAYER_ID);
+      setupSketch();
+    });
+  }
+
+  function setupSketch() {
+    const sketch = new SketchViewModel({
+      view: view,
+      layer: view.graphics
+    });
+
+    document.getElementById("drawBtn").onclick = () => {
+      view.graphics.removeAll();
+      sketch.create("polygon");
+    };
+
+    document.getElementById("clearBtn").onclick = clearSelection;
+
+    sketch.on("create", evt => {
+      if (evt.state === "complete") {
+        selectAssets(evt.graphic.geometry);
+      }
+    });
+  }
+
+  function selectAssets(geometry) {
+    const query = assetLayer.createQuery();
+    query.geometry = geometry;
+    query.spatialRelationship = "intersects";
+    query.outFields = ["GlobalID"];
+
+    assetLayer.queryFeatures(query).then(res => {
+      selectedGlobalIDs = res.features.map(f => f.attributes.GlobalID);
+      updateCount();
+    });
+  }
+
+  function updateCount() {
+    document.getElementById("selectionCount").innerText =
+      `${selectedGlobalIDs.length} assets selected`;
+  }
+
+  function clearSelection() {
+    selectedGlobalIDs = [];
+    view.graphics.removeAll();
+    updateCount();
+  }
+
+  document.getElementById("submitBtn").onclick = () => {
+    if (!selectedGlobalIDs.length) {
+      alert("No assets selected");
+      return;
+    }
+
+    const date = document.getElementById("inspectionDate").value;
+    const score = document.getElementById("conditionScore").value;
+    const req = document.getElementById("requiresMaintenance").value;
+
+    const features = selectedGlobalIDs.map(id => ({
+      attributes: {
+        inspection_date: date,
+        condition_score: score,
+        requires_maintenance: req,
+        relfeatureglobalid: id
+      }
+    }));
+
+    inspectionLayer.applyEdits({
+      addFeatures: features
+    }).then(() => {
+      alert("Inspections added successfully");
+      clearSelection();
+    }).catch(err => {
+      console.error(err);
+      alert("Error adding inspections");
+    });
+  };
+});
+</script>
+
+</body>
+</html>

@@ -6,22 +6,20 @@
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
 <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css" />
 <style>
-html, body, #viewDiv {
-  padding: 0; margin: 0; height: 100%; width: 100%; overflow: hidden;
-}
+html, body, #viewDiv { padding:0; margin:0; height:100%; width:100%; overflow:hidden; }
 #panel {
-  position: absolute; right: 0; top: 0; width: 340px; height: 100%;
-  background: white; box-shadow: -2px 0 8px rgba(0,0,0,.3); padding: 12px;
-  display: flex; flex-direction: column;
+  position:absolute; right:0; top:0; width:340px; height:100%;
+  background:white; box-shadow:-2px 0 8px rgba(0,0,0,.3); padding:12px;
+  display:flex; flex-direction:column;
 }
-#panel h2 { margin: 0 0 10px 0; }
-label { font-size: 13px; }
-select, input, button { width: 100%; padding: 6px; margin-bottom: 8px; }
-button { background: #0079c1; color: white; border: none; cursor: pointer; }
-button:hover { background: #005a87; }
-#selectionCount { font-weight: bold; margin: 10px 0; }
-#toolbar { position: absolute; top: 10px; left: 10px; z-index: 10; }
-#toolbar button { width: auto; margin-right: 5px; }
+#panel h2 { margin:0 0 10px 0; }
+label { font-size:13px; }
+select, input, button { width:100%; padding:6px; margin-bottom:8px; }
+button { background:#0079c1; color:white; border:none; cursor:pointer; }
+button:hover { background:#005a87; }
+#selectionCount { font-weight:bold; margin:10px 0; }
+#toolbar { position:absolute; top:10px; left:10px; z-index:10; }
+#toolbar button { width:auto; margin-right:5px; }
 </style>
 </head>
 <body>
@@ -31,13 +29,16 @@ button:hover { background: #005a87; }
 <div id="toolbar">
   <button id="drawBtn">Draw Selection</button>
   <button id="clearBtn">Clear</button>
+  <button id="loginBtn">Login</button>
 </div>
 
 <div id="panel">
   <h2>Bulk Inspection</h2>
   <div id="selectionCount">0 assets selected</div>
+
   <label>Date</label>
   <input type="date" id="inspectionDate" required>
+
   <label>Condition Score</label>
   <select id="conditionScore">
     <option value="">Select</option>
@@ -47,12 +48,14 @@ button:hover { background: #005a87; }
     <option value="4">4 - Good</option>
     <option value="5">5 - Very Good</option>
   </select>
+
   <label>Requires Maintenance</label>
   <select id="requiresMaintenance">
     <option value="">Select</option>
     <option value="Yes">Yes</option>
     <option value="No">No</option>
   </select>
+
   <button id="submitBtn">Add Inspections</button>
 </div>
 
@@ -65,28 +68,26 @@ require([
   "esri/widgets/Sketch/SketchViewModel"
 ], function(IdentityManager, WebMap, MapView, SketchViewModel) {
 
-  const WEBMAP_ID = "552cdf8d85234994a53339f6fbacfa3b";
+  // ====== CONFIGURE ======
+  const WEBMAP_ID = "552cdf8d85234994a53339f6fbacfa3b";          // <-- Update this
+  const ASSET_LAYER_TITLE = "Cat Traps";           // <-- Update this
+  const INSPECTION_LAYER_TITLE = "Cat Trapping Data";   // <-- Update this
+  const PORTAL_URL = "https://www.tmt.maps.arcgis.com";    // AGOL portal
+  // ======================
+
   let view, assetLayer, inspectionLayer;
   let selectedGlobalIDs = [];
 
-  // Ensure user is signed in
-  IdentityManager.checkSignInStatus("https://www.tmt.maps.arcgis.com/sharing")
-    .catch(() => IdentityManager.getCredential("https://www.tmt.maps.arcgis.com/sharing"))
-    .then(init)
-    .catch(err => console.error("Login failed", err));
-
   function init() {
     const webmap = new WebMap({ portalItem: { id: WEBMAP_ID } });
-
     view = new MapView({ container: "viewDiv", map: webmap });
 
     webmap.when(() => {
-      // Find layers by title instead of numeric layerId
-      assetLayer = webmap.layers.find(l => l.title === "Cat Traps");
-      inspectionLayer = webmap.layers.find(l => l.title === "Cat Trapping Data");
+      assetLayer = webmap.layers.find(l => l.title === ASSET_LAYER_TITLE);
+      inspectionLayer = webmap.layers.find(l => l.title === INSPECTION_LAYER_TITLE);
 
       if (!assetLayer || !inspectionLayer) {
-        console.error("Layers not found. Check titles.");
+        console.error("Layers not found. Check titles in the WebMap.");
         return;
       }
 
@@ -94,6 +95,7 @@ require([
     });
   }
 
+  // ===== Sketch / Selection =====
   function setupSketch() {
     const sketch = new SketchViewModel({ view: view, layer: view.graphics });
 
@@ -101,7 +103,6 @@ require([
       view.graphics.removeAll();
       sketch.create("polygon");
     };
-
     document.getElementById("clearBtn").onclick = clearSelection;
 
     sketch.on("create", evt => {
@@ -132,6 +133,7 @@ require([
     updateCount();
   }
 
+  // ===== Submit bulk inspections =====
   document.getElementById("submitBtn").onclick = () => {
     if (!selectedGlobalIDs.length) return alert("No assets selected");
 
@@ -149,15 +151,17 @@ require([
     }));
 
     inspectionLayer.applyEdits({ addFeatures: features })
-      .then(() => {
-        alert("Inspections added successfully");
-        clearSelection();
-      })
-      .catch(err => {
-        console.error(err);
-        alert("Error adding inspections");
-      });
+      .then(() => { alert("Inspections added successfully"); clearSelection(); })
+      .catch(err => { console.error(err); alert("Error adding inspections"); });
   };
+
+  // ===== Login button =====
+  document.getElementById("loginBtn").onclick = () => {
+    IdentityManager.getCredential(PORTAL_URL + "/sharing")
+      .then(() => init())
+      .catch(err => console.error("Login failed", err));
+  };
+
 });
 </script>
 

@@ -3,77 +3,27 @@
 <head>
 <meta charset="utf-8" />
 <title>Bulk Asset Inspections</title>
-
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
-
 <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css" />
-
 <style>
 html, body, #viewDiv {
-  padding: 0;
-  margin: 0;
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
+  padding: 0; margin: 0; height: 100%; width: 100%; overflow: hidden;
 }
-
 #panel {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 340px;
-  height: 100%;
-  background: white;
-  box-shadow: -2px 0 8px rgba(0,0,0,.3);
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
+  position: absolute; right: 0; top: 0; width: 340px; height: 100%;
+  background: white; box-shadow: -2px 0 8px rgba(0,0,0,.3); padding: 12px;
+  display: flex; flex-direction: column;
 }
-
-#panel h2 {
-  margin: 0 0 10px 0;
-}
-
-label {
-  font-size: 13px;
-}
-
-select, input, button {
-  width: 100%;
-  padding: 6px;
-  margin-bottom: 8px;
-}
-
-button {
-  background: #0079c1;
-  color: white;
-  border: none;
-  cursor: pointer;
-}
-
-button:hover {
-  background: #005a87;
-}
-
-#selectionCount {
-  font-weight: bold;
-  margin: 10px 0;
-}
-
-#toolbar {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 10;
-}
-
-#toolbar button {
-  width: auto;
-  margin-right: 5px;
-}
+#panel h2 { margin: 0 0 10px 0; }
+label { font-size: 13px; }
+select, input, button { width: 100%; padding: 6px; margin-bottom: 8px; }
+button { background: #0079c1; color: white; border: none; cursor: pointer; }
+button:hover { background: #005a87; }
+#selectionCount { font-weight: bold; margin: 10px 0; }
+#toolbar { position: absolute; top: 10px; left: 10px; z-index: 10; }
+#toolbar button { width: auto; margin-right: 5px; }
 </style>
 </head>
-
 <body>
 
 <div id="viewDiv"></div>
@@ -85,12 +35,9 @@ button:hover {
 
 <div id="panel">
   <h2>Bulk Inspection</h2>
-
   <div id="selectionCount">0 assets selected</div>
-
   <label>Date</label>
   <input type="date" id="inspectionDate" required>
-
   <label>Condition Score</label>
   <select id="conditionScore">
     <option value="">Select</option>
@@ -100,76 +47,55 @@ button:hover {
     <option value="4">4 - Good</option>
     <option value="5">5 - Very Good</option>
   </select>
-
   <label>Requires Maintenance</label>
   <select id="requiresMaintenance">
     <option value="">Select</option>
     <option value="Yes">Yes</option>
     <option value="No">No</option>
   </select>
-
   <button id="submitBtn">Add Inspections</button>
 </div>
 
 <script src="https://js.arcgis.com/4.28"></script>
 <script>
 require([
-  "esri/identity/OAuthInfo",
   "esri/identity/IdentityManager",
   "esri/WebMap",
   "esri/views/MapView",
-  "esri/layers/FeatureLayer",
-  "esri/widgets/Sketch/SketchViewModel",
-  "esri/geometry/geometryEngine"
-], function (
-  OAuthInfo, esriId, WebMap, MapView,
-  FeatureLayer, SketchViewModel, geometryEngine
-) {
+  "esri/widgets/Sketch/SketchViewModel"
+], function(IdentityManager, WebMap, MapView, SketchViewModel) {
 
-  /* ===================== CONFIG ===================== */
-  const CLIENT_ID = "J51WxEYk7dATUHHR";
   const WEBMAP_ID = "552cdf8d85234994a53339f6fbacfa3b";
-  const ASSET_LAYER_ID = 19143e53b24-layer-69;
-  const INSPECTION_LAYER_ID = 19466a7cad4-layer-14;
-  /* ================================================= */
-
-  const oauthInfo = new OAuthInfo({
-    appId: CLIENT_ID,
-    portalUrl: "https://www.tmt.maps.arcgis.com",
-    popup: false
-  });
-
-  esriId.registerOAuthInfos([oauthInfo]);
-
-  esriId.checkSignInStatus(oauthInfo.portalUrl + "/sharing")
-    .catch(() => esriId.getCredential(oauthInfo.portalUrl + "/sharing"))
-    .then(init);
-
   let view, assetLayer, inspectionLayer;
   let selectedGlobalIDs = [];
 
-  function init() {
-    const webmap = new WebMap({
-      portalItem: { id: WEBMAP_ID }
-    });
+  // Ensure user is signed in
+  IdentityManager.checkSignInStatus("https://www.tmt.maps.arcgis.com/sharing")
+    .catch(() => IdentityManager.getCredential("https://www.tmt.maps.arcgis.com/sharing"))
+    .then(init)
+    .catch(err => console.error("Login failed", err));
 
-    view = new MapView({
-      container: "viewDiv",
-      map: webmap
-    });
+  function init() {
+    const webmap = new WebMap({ portalItem: { id: WEBMAP_ID } });
+
+    view = new MapView({ container: "viewDiv", map: webmap });
 
     webmap.when(() => {
-      assetLayer = webmap.layers.find(l => l.layerId === ASSET_LAYER_ID);
-      inspectionLayer = webmap.layers.find(l => l.layerId === INSPECTION_LAYER_ID);
+      // Find layers by title instead of numeric layerId
+      assetLayer = webmap.layers.find(l => l.title === "Cat Traps");
+      inspectionLayer = webmap.layers.find(l => l.title === "Cat Trapping Data");
+
+      if (!assetLayer || !inspectionLayer) {
+        console.error("Layers not found. Check titles.");
+        return;
+      }
+
       setupSketch();
     });
   }
 
   function setupSketch() {
-    const sketch = new SketchViewModel({
-      view: view,
-      layer: view.graphics
-    });
+    const sketch = new SketchViewModel({ view: view, layer: view.graphics });
 
     document.getElementById("drawBtn").onclick = () => {
       view.graphics.removeAll();
@@ -179,9 +105,7 @@ require([
     document.getElementById("clearBtn").onclick = clearSelection;
 
     sketch.on("create", evt => {
-      if (evt.state === "complete") {
-        selectAssets(evt.graphic.geometry);
-      }
+      if (evt.state === "complete") selectAssets(evt.graphic.geometry);
     });
   }
 
@@ -209,10 +133,7 @@ require([
   }
 
   document.getElementById("submitBtn").onclick = () => {
-    if (!selectedGlobalIDs.length) {
-      alert("No assets selected");
-      return;
-    }
+    if (!selectedGlobalIDs.length) return alert("No assets selected");
 
     const date = document.getElementById("inspectionDate").value;
     const score = document.getElementById("conditionScore").value;
@@ -227,15 +148,15 @@ require([
       }
     }));
 
-    inspectionLayer.applyEdits({
-      addFeatures: features
-    }).then(() => {
-      alert("Inspections added successfully");
-      clearSelection();
-    }).catch(err => {
-      console.error(err);
-      alert("Error adding inspections");
-    });
+    inspectionLayer.applyEdits({ addFeatures: features })
+      .then(() => {
+        alert("Inspections added successfully");
+        clearSelection();
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Error adding inspections");
+      });
   };
 });
 </script>

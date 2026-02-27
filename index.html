@@ -1,141 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Add Bulk Related Records</title>
-  <link rel="stylesheet" href="https://js.arcgis.com/4.26/esri/themes/light/main.css">
-  <script src="https://js.arcgis.com/4.26/"></script>
+<meta charset="UTF-8">
+<title>Multi Select Trap Records</title>
+
+<link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css">
+<script src="https://js.arcgis.com/4.30/"></script>
+
 <style>
-  /* Base */
-  html, body, #viewDiv {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  }
-
-  /* Side panel */
-  #sidePanel {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 360px;
-    height: 100%;
-    background: #fff;
-    box-shadow: -4px 0 12px rgba(0,0,0,0.2);
-    padding: 25px 20px;
-    overflow-y: auto;
-    display: none;
-    z-index: 10;
-    border-left: 1px solid #ddd;
-    border-radius: 0 0 0 8px;
-  }
-
-  #sidePanel h3 {
-    margin-top: 0;
-    font-size: 1.5rem;
-    color: #333;
-    border-bottom: 1px solid #eee;
-    padding-bottom: 10px;
-  }
-
-  #closePanel {
-    cursor: pointer;
-    float: right;
-    font-size: 1.2rem;
-    color: #c0392b;
-    font-weight: bold;
-    margin-top: -5px;
-  }
-
-  /* Selected count */
-  #count {
-    margin: 15px 0;
-    font-weight: 600;
-    color: #0079c1;
-    font-size: 1.1rem;
-  }
-
-  /* Form labels and inputs */
-  label {
-    display: block;
-    margin-top: 15px;
-    margin-bottom: 5px;
-    font-weight: 600;
-    color: #555;
-  }
-
-  input, select {
-    width: 100%;
-    padding: 10px 12px;
-    font-size: 1rem;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    box-sizing: border-box;
-    transition: border-color 0.3s, box-shadow 0.3s;
-  }
-
-  input:focus, select:focus {
-    outline: none;
-    border-color: #0079c1;
-    box-shadow: 0 0 6px rgba(0,121,193,0.3);
-  }
-
-  /* Submit button */
-  #submitBtn {
-    margin-top: 25px;
-    width: 100%;
-    padding: 12px;
-    background: #0079c1;
-    color: #fff;
-    font-weight: 600;
-    border: none;
-    border-radius: 6px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: background 0.3s, box-shadow 0.3s;
-  }
-
-  #submitBtn:hover {
-    background: #005a8c;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  }
-
-  /* Reset form button styles */
-  button:focus {
-    outline: none;
-  }
-
-  /* Table styling for previous inspections (if used) */
-  #inspectionsTable {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-  }
-
-  #inspectionsTable th, #inspectionsTable td {
-    padding: 10px;
-    border: 1px solid #eee;
-    text-align: left;
-    font-size: 0.95rem;
-  }
-
-  #inspectionsTable th {
-    background-color: #f4f6f8;
-    font-weight: 600;
-    color: #333;
-  }
-
-  #inspectionsTable tr:nth-child(even) {
-    background-color: #fafafa;
-  }
+html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI", Tahoma, Geneva, Verdana, sans-serif; }
+#sidePanel{ position:absolute; top:0; right:0; width:360px; height:100%; background:#fff; box-shadow:-4px 0 12px rgba(0,0,0,0.2); padding:20px; overflow-y:auto; display:none; z-index:10; border-left:1px solid #ddd; }
+#count{ margin:15px 0; font-weight:600; color:#0079c1; }
+#relatedForm label { display:block; margin-top:15px; margin-bottom:5px; font-weight:600; }
+#relatedForm input, #relatedForm select { width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:4px; font-size:14px; box-sizing:border-box; }
+#submitBtn{ margin-top:20px; width:100%; padding:12px; background:#0079c1; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:16px; }
+#submitBtn:hover{ background:#005a8c; }
+.mapButton { display:block; margin-top:5px; padding:6px 10px; background:#0079c1; color:#fff; border:none; border-radius:3px; cursor:pointer; font-size:13px; }
+.mapButton:hover { background:#005a8c; }
 </style>
 </head>
+
 <body>
 <div id="viewDiv"></div>
 
 <div id="sidePanel">
-  <span id="closePanel">✖</span>
   <h3>Add Cat Trapping Records</h3>
   <div id="count">0 traps selected</div>
 
@@ -152,19 +40,6 @@
       <option value="Closed">Closed</option>
     </select>
 
-    <label>Trap Caught</label>
-    <select id="TrapCaught_1">
-      <option value="">--Select--</option>
-      <option value="Cat">Cat</option>
-      <option value="Rabbit">Rabbit</option>
-      <option value="Rat">Rat</option>
-      <option value="Pig">Pig</option>
-      <option value="Rail">Rail</option>
-      <option value="Harrier">Harrier</option>
-      <option value="OtherBird">OtherBird</option>
-      <option value="Other">Other</option>
-    </select>
-
     <label>Leave trap closed?</label>
     <select id="ClosingTrap">
       <option value="">--Select--</option>
@@ -173,7 +48,7 @@
     </select>
   </form>
 
-  <button id="submitBtn">Add records</button>
+  <button id="submitBtn">Add Records</button>
 </div>
 
 <script>
@@ -182,148 +57,205 @@ require([
   "esri/views/MapView",
   "esri/widgets/Sketch/SketchViewModel",
   "esri/layers/GraphicsLayer"
-], function(WebMap, MapView, SketchViewModel, GraphicsLayer) {
+], function(WebMap, MapView, SketchViewModel, GraphicsLayer){
 
-  const webmap = new WebMap({ portalItem: { id: "552cdf8d85234994a53339f6fbacfa3b" } });
+  const webmap = new WebMap({
+    portalItem: { id: "552cdf8d85234994a53339f6fbacfa3b" }
+  });
 
   const view = new MapView({
     container: "viewDiv",
     map: webmap
   });
 
-  // -------------------------
-  // 1️⃣ Lasso Tool Button
-  // -------------------------
-  const drawBtn = document.createElement("button");
-  drawBtn.innerText = "Lasso Tool";
-  drawBtn.classList.add("esri-widget", "esri-widget--button");
-  drawBtn.style.marginTop = "10px";
-  drawBtn.style.width = "120px";
-  drawBtn.title = "Draw a polygon to select multiple points";
-  view.ui.add(drawBtn, { position: "top-left", index: 1 });
-
-  // -------------------------
-  // 2️⃣ Layers + Selection
-  // -------------------------
   let trapsLayer, relatedTable, layerView;
-  const highlightLayer = new GraphicsLayer();
-  const selectionLayer = new GraphicsLayer({ visible: false });
-  webmap.addMany([highlightLayer, selectionLayer]);
+  let selectedObjectIds = [];
+  let selectedGlobalIDs = [];
+  let highlightHandle = null;
 
-  view.when(() => {
+  const sidePanel = document.getElementById("sidePanel");
+  const countDiv = document.getElementById("count");
+
+  function updateCount(){
+    countDiv.innerText = selectedObjectIds.length + " traps selected";
+  }
+
+  view.when(async () => {
+
     trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === "Cat Traps");
     relatedTable = webmap.tables.find(t => t.title === "Cat Trapping Data");
-    view.whenLayerView(trapsLayer).then(lv => layerView = lv);
-  });
 
-  let selectedGlobalIDs = [];
-  const countDiv = document.getElementById("count");
-  const sidePanel = document.getElementById("sidePanel");
+    trapsLayer.popupEnabled = false;
+    view.popup.autoOpenEnabled = false;
 
-  function updateCount() {
-    countDiv.innerText = `${selectedGlobalIDs.length} traps selected`;
-  }
+    layerView = await view.whenLayerView(trapsLayer);
 
-  function outlinePoints(globalIDs) {
-    highlightLayer.removeAll();
-    if (!layerView || globalIDs.length === 0) return;
+    // GraphicsLayer for lasso
+    const lassoLayer = new GraphicsLayer();
+    view.map.add(lassoLayer);
 
-    const query = trapsLayer.createQuery();
-    query.where = `GlobalID IN ('${globalIDs.join("','")}')`;
-    query.outFields = ["GlobalID"];
-    query.returnGeometry = true;
-
-    trapsLayer.queryFeatures(query).then(result => {
-      result.features.forEach(f => {
-        highlightLayer.add({
-          geometry: f.geometry,
-          symbol: {
-            type: "simple-marker",
-            style: "circle",
-            color: [0,0,0,0],
-            size: 18,
-            outline: { color: [255,0,0,1], width: 2 }
-          }
-        });
-      });
+    // SketchViewModel for lasso
+    const sketchVM = new SketchViewModel({
+      view: view,
+      layer: lassoLayer,
+      polygonSymbol: {
+        type: "simple-fill",
+        color: [0, 0, 255, 0.1],
+        style: "solid",
+        outline: { color: [0, 0, 255], width: 1 }
+      }
     });
-  }
 
-  // -------------------------
-  // 3️⃣ Click selection
-  // -------------------------
-  view.on("click", async (event) => {
-    const hit = await view.hitTest(event);
-    const graphic = hit.results.find(r => r.graphic.layer === trapsLayer)?.graphic;
-    if (!graphic) return;
+    // Buttons
+    const lassoBtn = document.createElement("button");
+    lassoBtn.innerText = "Lasso Select";
+    lassoBtn.className = "mapButton";
+    lassoBtn.style.marginTop = "10px";
+    lassoBtn.onclick = () => sketchVM.create("polygon");
 
-    selectedGlobalIDs = [graphic.attributes.GlobalID];
-    outlinePoints(selectedGlobalIDs);
-    updateCount();
-    sidePanel.style.display = "block";
-    document.getElementById("DateChecked").value = new Date().toISOString().slice(0,16);
+    const clearBtn = document.createElement("button");
+    clearBtn.innerText = "Clear Selection";
+    clearBtn.className = "mapButton";
+    clearBtn.onclick = () => {
+      selectedObjectIds = [];
+      selectedGlobalIDs = [];
+      if(highlightHandle) highlightHandle.remove();
+      highlightHandle = null;
+      updateCount();
+      sidePanel.style.display = "none";
+      console.log("Selection cleared");
+    };
+
+    view.ui.add(lassoBtn, "top-left");
+    view.ui.add(clearBtn, "top-left");
+
+    // --- Lasso selection ---
+    sketchVM.on("create", async event => {
+      if(event.state !== "complete") return;
+
+      const polygon = event.graphic.geometry;
+
+      const query = trapsLayer.createQuery();
+      query.geometry = polygon;
+      query.spatialRelationship = "intersects";
+      query.returnGeometry = false;
+      query.outFields = ["OBJECTID"];
+
+      const results = await layerView.queryFeatures(query);
+      console.log("Lasso query returned features:", results.features.length);
+
+      for(const f of results.features){
+        const objectId = f.attributes[trapsLayer.objectIdField];
+
+        // Query layer for GlobalID
+        const fullQuery = trapsLayer.createQuery();
+        fullQuery.objectIds = [objectId];
+        fullQuery.outFields = ["GlobalID"];
+        fullQuery.returnGeometry = false;
+
+        const fullFeature = (await trapsLayer.queryFeatures(fullQuery)).features[0];
+        if(!fullFeature) continue;  // check for null
+
+        const globalId = fullFeature.attributes.GlobalID;
+        console.log("Lasso feature OBJECTID:", objectId, "GlobalID:", globalId);
+
+        if(!selectedObjectIds.includes(objectId) && globalId){
+          selectedObjectIds.push(objectId);
+          selectedGlobalIDs.push(globalId);
+        }
+      }
+
+      console.log("Selected GlobalIDs after lasso:", selectedGlobalIDs);
+
+      if(highlightHandle) highlightHandle.remove();
+      highlightHandle = layerView.highlight(selectedObjectIds);
+
+      updateCount();
+      sidePanel.style.display = "block";
+
+      const dateInput = document.getElementById("DateChecked");
+      if(!dateInput.value){ dateInput.value = new Date().toISOString().slice(0,16); }
+
+      lassoLayer.removeAll();
+    });
+
   });
 
-  // -------------------------
-  // 4️⃣ Lasso selection
-  // -------------------------
-  const sketchVM = new SketchViewModel({ view, layer: selectionLayer });
-  drawBtn.addEventListener("click", () => {
-    selectedGlobalIDs = [];
-    outlinePoints([]);
-    sketchVM.create("polygon", { mode: "freehand" });
-  });
+  // --- Click select ---
+  view.on("click", async event => {
+    const hit = await view.hitTest(event, { include: [trapsLayer] });
+    if (!hit.results.length) return;
 
-  sketchVM.on("create", async (event) => {
-    if (event.state !== "complete") return;
+    const graphic = hit.results[0].graphic;
+    const objectId = graphic.attributes[trapsLayer.objectIdField];
+
+    // Query the original layer for GlobalID
     const query = trapsLayer.createQuery();
-    query.geometry = event.graphic.geometry;
-    query.spatialRelationship = "intersects";
+    query.objectIds = [objectId];
     query.outFields = ["GlobalID"];
     query.returnGeometry = false;
 
     const result = await trapsLayer.queryFeatures(query);
-    if (result.features.length) {
-      selectedGlobalIDs = result.features.map(f => f.attributes.GlobalID);
-      outlinePoints(selectedGlobalIDs);
-      updateCount();
-      sidePanel.style.display = "block";
-      document.getElementById("DateChecked").value = new Date().toISOString().slice(0,16);
+    if (!result.features.length) return;
+
+    const fullFeature = result.features[0];
+    if(!fullFeature) return; // check for null
+
+    const globalId = fullFeature.attributes.GlobalID;
+    console.log("Clicked feature OBJECTID:", objectId, "GlobalID:", globalId);
+
+    if (!selectedObjectIds.includes(objectId) && globalId){
+      selectedObjectIds.push(objectId);
+      selectedGlobalIDs.push(globalId);
     }
 
-    selectionLayer.removeAll();
-    sketchVM.cancel();
+    console.log("Selected GlobalIDs after click:", selectedGlobalIDs);
+
+    if (highlightHandle) highlightHandle.remove();
+    highlightHandle = layerView.highlight(selectedObjectIds);
+
+    updateCount();
+    sidePanel.style.display = "block";
+
+    const dateInput = document.getElementById("DateChecked");
+    if (!dateInput.value) dateInput.value = new Date().toISOString().slice(0,16);
   });
 
-  // -------------------------
-  // 5️⃣ Close panel
-  // -------------------------
-  document.getElementById("closePanel").onclick = () => { sidePanel.style.display = "none"; };
-
-  // -------------------------
-  // 6️⃣ Submit records
-  // -------------------------
+  // --- Submit ---
   document.getElementById("submitBtn").onclick = async () => {
-    if (!selectedGlobalIDs.length) { alert("Select at least one trap"); return; }
+    if (!selectedGlobalIDs.length){ alert("Select at least one trap"); return; }
 
-    const DateChecked = document.getElementById("DateChecked").value;
-    const TrapState_1 = document.getElementById("TrapState_1").value;
-    const TrapCaught_1 = document.getElementById("TrapCaught_1").value;
-    const ClosingTrap = document.getElementById("ClosingTrap").value;
+    const dateInput = document.getElementById("DateChecked").value;
+    const trapState = document.getElementById("TrapState_1").value;
+    const closingTrap = document.getElementById("ClosingTrap").value;
 
-    if (!DateChecked || !TrapState_1 || !ClosingTrap) { alert("Please complete required fields"); return; }
+    if (!dateInput || !trapState || !closingTrap){ alert("Complete required fields"); return; }
 
     const addFeatures = selectedGlobalIDs.map(guid => ({
-      attributes: { GUID: guid, DateChecked, TrapState_1, TrapCaught_1, ClosingTrap }
+      attributes: { GUID: guid, DateChecked: dateInput, TrapState_1: trapState, ClosingTrap: closingTrap }
     }));
 
-    await relatedTable.applyEdits({ addFeatures });
-    alert(`Added ${addFeatures.length} records`);
-    selectedGlobalIDs = [];
-    outlinePoints([]);
-    updateCount();
-    sidePanel.style.display = "none";
-    document.getElementById("relatedForm").reset();
+    console.log("Submitting features:", addFeatures);
+
+    try {
+      const result = await relatedTable.applyEdits({ addFeatures });
+      console.log("applyEdits result:", result);
+
+      // Check for null errors
+      const failed = result.addFeatureResults.filter(r => r.error != null);
+
+      if (failed.length === 0){
+        alert("Added " + addFeatures.length + " records");
+        document.getElementById("relatedForm").reset();
+      } else {
+        console.error("Some records failed:", failed);
+        alert("Failed to add some records. Check console.");
+      }
+
+    } catch(err){
+      console.error("applyEdits error:", err);
+      alert("Error adding records: " + err.message);
+    }
   };
 
 });

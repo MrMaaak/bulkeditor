@@ -2,48 +2,93 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Bulk Asset Inspections</title>
 <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+<title>Bulk Asset Inspections</title>
 <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css" />
 <style>
-html, body, #viewDiv {
-  padding: 0; margin:0; height:100%; width:100%;
-}
-#viewDiv { position: relative; }
+  html, body, #viewDiv {
+    padding: 0;
+    margin: 0;
+    height: 100%;
+    width: 100%;
+  }
 
-#sidePanel {
-  position: fixed; top:0; right:-100%; width:340px; height:100%;
-  background:white; box-shadow:0 0 10px rgba(0,0,0,0.3);
-  transition:right 0.3s; display:flex; flex-direction:column; padding:10px;
-}
+  #sidePanel {
+    position: fixed;
+    top: 0;
+    right: -100%;
+    width: 330px;
+    height: 100%;
+    background: white;
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    transition: right 0.5s;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 10px;
+    z-index: 100;
+  }
 
-#infoDiv { flex-grow:1; overflow-y:auto; margin-top:10px; }
+  #inspectionForm label {
+    display: block;
+    margin-top: 8px;
+  }
 
-#infoTable { width:100%; border-collapse: collapse; }
-#infoTable th, #infoTable td { padding:8px; border:1px solid #ddd; text-align:left; }
-#infoTable th { background-color:#f2f2f2; }
+  #inspectionForm input, #inspectionForm select {
+    width: 100%;
+    padding: 5px;
+    margin-top: 2px;
+  }
 
-button { background:#007BFF; color:white; border:none; cursor:pointer; padding:8px; margin-bottom:6px; }
-button:hover { background:#0056b3; }
+  #inspectionForm button {
+    margin-top: 10px;
+    width: calc(50% - 5px);
+    padding: 10px;
+    border: none;
+    cursor: pointer;
+    background-color: #007BFF;
+    color: white;
+  }
 
-select, input[type="date"] { width:100%; padding:5px; margin-bottom:6px; }
+  #inspectionForm button:hover {
+    background-color: #0056b3;
+  }
 
-#successMessage {
-  background-color: #4CAF50; color:white; padding:10px; text-align:center;
-  position: fixed; top:0; left:50%; transform:translateX(-50%); z-index:1000; display:none;
-}
+  #infoTable {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
 
-#drawBtn, #clearBtn { position:absolute; top:10px; left:10px; z-index:10; width:auto; margin-right:5px; }
+  #infoTable th, #infoTable td {
+    padding: 6px;
+    border: 1px solid #ddd;
+    text-align: left;
+  }
+
+  #infoTable th {
+    background-color: #f2f2f2;
+  }
+
+  #successMessage {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px;
+    text-align: center;
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: none;
+  }
 </style>
 </head>
 <body>
 <div id="viewDiv"></div>
 
-<button id="drawBtn">Draw Selection</button>
-<button id="clearBtn">Clear Selection</button>
-
 <div id="sidePanel">
-  <h2>Bulk Inspection</h2>
+  <h2>Add New Inspection</h2>
   <form id="inspectionForm">
     <label for="inspectionDate">Inspection Date:</label>
     <input type="date" id="inspectionDate" required>
@@ -53,7 +98,7 @@ select, input[type="date"] { width:100%; padding:5px; margin-bottom:6px; }
       <option value="">Select</option>
       <option value="1">1 - Very Poor</option>
       <option value="2">2 - Poor</option>
-      <option value="3">3 - Ok</option>
+      <option value="3">3 - OK</option>
       <option value="4">4 - Good</option>
       <option value="5">5 - Very Good</option>
     </select>
@@ -65,27 +110,28 @@ select, input[type="date"] { width:100%; padding:5px; margin-bottom:6px; }
       <option value="No">No</option>
     </select>
 
-    <div style="margin-top:10px;">
-      <button type="submit">Add Inspections</button>
+    <input type="hidden" id="relfeatureglobalid">
+
+    <div style="display: flex; justify-content: space-between;">
+      <button type="submit">Submit</button>
+      <button type="button" id="clearSelectionButton">Clear Selection</button>
     </div>
   </form>
 
-  <div id="infoDiv">
-    <h2>Previous Inspections (first selected feature)</h2>
-    <table id="infoTable">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Score</th>
-          <th>Maintenance</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
+  <h2>Previous Inspections</h2>
+  <table id="infoTable">
+    <thead>
+      <tr>
+        <th>Inspection Date</th>
+        <th>Condition Score</th>
+        <th>Requires Maintenance</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 </div>
 
-<div id="successMessage">New inspections added successfully!</div>
+<div id="successMessage">New inspection added successfully!</div>
 
 <script src="https://js.arcgis.com/4.28/"></script>
 <script>
@@ -93,148 +139,160 @@ require([
   "esri/Map",
   "esri/views/MapView",
   "esri/layers/FeatureLayer",
+  "esri/widgets/Sketch/Sketch",
+  "esri/layers/GraphicsLayer",
   "esri/Graphic",
-  "esri/widgets/Sketch/SketchViewModel",
-  "esri/geometry/geometryEngine"
-], function(Map, MapView, FeatureLayer, Graphic, SketchViewModel, geometryEngine) {
+  "esri/geometry/geometryEngine",
+  "esri/widgets/Locate"
+], function(Map, MapView, FeatureLayer, Sketch, GraphicsLayer, Graphic, geometryEngine, Locate) {
+
+  // --- CONFIG ---
+  const featureLayerUrl = "https://services3.arcgis.com/HYKqs4HgCmzergJk/arcgis/rest/services/TMT_VIEW_AoteaCombinedCatTrapData_/FeatureServer/0";
+  const inspectionLayerUrl = "https://services3.arcgis.com/HYKqs4HgCmzergJk/arcgis/rest/services/TMT_VIEW_AoteaCombinedCatTrapData_/FeatureServer/1";
+
+  const featureLayer = new FeatureLayer({ url: featureLayerUrl });
+  const inspectionLayer = new FeatureLayer({ url: inspectionLayerUrl });
+
+  const graphicsLayer = new GraphicsLayer();
 
   const map = new Map({
-    basemap: "topo-vector"
+    basemap: "topo-vector",
+    layers: [featureLayer, inspectionLayer, graphicsLayer]
   });
 
   const view = new MapView({
     container: "viewDiv",
     map: map,
-    center: [175.5,-36.8], // adjust
-    zoom: 11
+    center: [-174.8, -36.8], // adjust to your area
+    zoom: 10
   });
 
-  // --- Layers ---
-  const featureLayer = new FeatureLayer({
-    url: "https://services3.arcgis.com/HYKqs4HgCmzergJk/arcgis/rest/services/TMT_VIEW_AoteaCombinedCatTrapData_/FeatureServer/0"
-  });
-
-  const inspectionLayer = new FeatureLayer({
-    url: "https://services3.arcgis.com/HYKqs4HgCmzergJk/arcgis/rest/services/TMT_VIEW_AoteaCombinedCatTrapData_/FeatureServer/1"
-  });
-
-  map.add(featureLayer);
-  map.add(inspectionLayer);
-
-  // --- Selection setup ---
-  let selectedFeatures = [];
-  let sketch = new SketchViewModel({
+  const sketch = new Sketch({
     view: view,
-    layer: view.graphics
+    layer: graphicsLayer,
+    availableCreateTools: ["polygon", "rectangle"]
   });
 
-  document.getElementById("drawBtn").onclick = () => {
-    view.graphics.removeAll();
-    sketch.create("polygon"); // you can change to "rectangle"
-  };
+  view.ui.add(sketch, "top-right");
 
-  document.getElementById("clearBtn").onclick = () => {
-    view.graphics.removeAll();
-    selectedFeatures = [];
-    hidePanel();
-  };
+  let selectedFeatures = [];
 
-  sketch.on("create", evt => {
+  // --- Selection ---
+  sketch.on("create", function(evt) {
     if(evt.state === "complete") {
-      const geometry = evt.graphic.geometry;
-      const query = featureLayer.createQuery();
-      query.geometry = geometry;
-      query.spatialRelationship = "intersects";
-      query.returnGeometry = true;
-      query.outFields = ["GlobalID"];
-
-      featureLayer.queryFeatures(query).then(res => {
-        if(res.features.length) {
-          selectedFeatures = res.features;
-          view.graphics.removeAll();
-          selectedFeatures.forEach(f => {
-            view.graphics.add(new Graphic({
-              geometry: f.geometry,
-              symbol: { type:"simple-marker", color:"red", size:8 }
-            }));
-          });
-
-          // Show side panel with first feature
-          showPanel();
-          fetchInspections(selectedFeatures[0].attributes.GlobalID);
-        } else {
-          selectedFeatures = [];
-          hidePanel();
-          alert("No features selected in drawn area");
-        }
-      });
+      selectFeatures(evt.graphic.geometry);
     }
   });
 
-  function showPanel() { document.getElementById("sidePanel").style.right = "0"; }
-  function hidePanel() { document.getElementById("sidePanel").style.right = "-100%"; }
+  function selectFeatures(geometry) {
+    const query = featureLayer.createQuery();
+    query.geometry = geometry;
+    query.spatialRelationship = "intersects";
+    query.returnGeometry = true;
+    query.outFields = ["GlobalID"];
 
-  // --- Inspections ---
-  function fetchInspections(globalID) {
-    const q = featureLayer.createQuery();
-    q.where = "relfeatureglobalid='" + globalID + "'";
-    q.returnGeometry = false;
-    q.outFields = ["inspection_date","condition_score","requires_maintenance"];
+    featureLayer.queryFeatures(query).then(res => {
+      selectedFeatures = res.features;
+      graphicsLayer.removeAll();
 
-    inspectionLayer.queryFeatures(q).then(res => {
-      const tbody = document.querySelector("#infoTable tbody");
-      tbody.innerHTML = "";
-      if(res.features.length) {
-        res.features.sort((a,b)=> new Date(b.attributes.inspection_date)-new Date(a.attributes.inspection_date));
-        res.features.forEach(f => {
-          const row = `<tr>
-            <td>${formatDate(f.attributes.inspection_date)}</td>
-            <td>${f.attributes.condition_score}</td>
-            <td>${f.attributes.requires_maintenance}</td>
-          </tr>`;
-          tbody.innerHTML += row;
+      if(selectedFeatures.length) {
+        selectedFeatures.forEach(f => {
+          graphicsLayer.add(new Graphic({
+            geometry: f.geometry,
+            symbol: { type:"simple-marker", color:"red", size:8 }
+          }));
         });
+
+        showPanel();
+        document.getElementById("relfeatureglobalid").value = selectedFeatures[0].attributes.GlobalID;
+        fetchInspections(selectedFeatures[0].attributes.GlobalID);
       } else {
-        tbody.innerHTML = "<tr><td colspan='3'>No inspections</td></tr>";
+        hidePanel();
+        alert("No features selected");
       }
     });
   }
 
-  function formatDate(dateStr) {
-    if(!dateStr) return "";
-    return new Date(dateStr).toLocaleDateString();
+  // --- Side Panel ---
+  function showPanel() { document.getElementById("sidePanel").style.right = "0"; }
+  function hidePanel() { document.getElementById("sidePanel").style.right = "-100%"; }
+
+  // --- Fetch inspections ---
+  function fetchInspections(globalID) {
+    const query = inspectionLayer.createQuery();
+    query.where = "relfeatureglobalid = '" + globalID + "'";
+    query.returnGeometry = false;
+    query.outFields = ["inspection_date", "condition_score", "requires_maintenance"];
+
+    inspectionLayer.queryFeatures(query).then(res => {
+      const tbody = document.querySelector("#infoTable tbody");
+      tbody.innerHTML = "";
+
+      if(res.features.length) {
+        res.features.sort((a,b) => new Date(b.attributes.inspection_date) - new Date(a.attributes.inspection_date));
+        res.features.forEach(f => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${formatDate(f.attributes.inspection_date)}</td>
+            <td>${f.attributes.condition_score}</td>
+            <td>${f.attributes.requires_maintenance}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      } else {
+        tbody.innerHTML = "<tr><td colspan='3'>No related inspections found.</td></tr>";
+      }
+    });
   }
 
-  // --- Add inspection to all selected ---
-  document.getElementById("inspectionForm").addEventListener("submit", e => {
+  function formatDate(d) {
+    if(!d) return "";
+    return new Date(d).toLocaleDateString();
+  }
+
+  // --- Add new inspection ---
+  document.getElementById("inspectionForm").addEventListener("submit", function(e){
     e.preventDefault();
-    if(!selectedFeatures.length) { alert("No features selected"); return; }
+    const inspectionDate = document.getElementById("inspectionDate").value;
+    const conditionScore = document.getElementById("conditionScore").value;
+    const requiresMaintenance = document.getElementById("requiresMaintenance").value;
+    const relfeatureglobalid = document.getElementById("relfeatureglobalid").value;
 
-    const date = document.getElementById("inspectionDate").value;
-    const score = document.getElementById("conditionScore").value;
-    const req = document.getElementById("requiresMaintenance").value;
-
-    const edits = selectedFeatures.map(f => ({
-      attributes: {
-        inspection_date: date,
-        condition_score: score,
-        requires_maintenance: req,
-        relfeatureglobalid: f.attributes.GlobalID
+    inspectionLayer.applyEdits({
+      addFeatures: [{
+        attributes: {
+          inspection_date: inspectionDate,
+          condition_score: conditionScore,
+          requires_maintenance: requiresMaintenance,
+          relfeatureglobalid: relfeatureglobalid
+        }
+      }]
+    }).then(res => {
+      if(res.addFeatureResults.length) {
+        showSuccess();
+        document.getElementById("inspectionForm").reset();
+        fetchInspections(relfeatureglobalid);
       }
-    }));
-
-    inspectionLayer.applyEdits({ addFeatures: edits }).then(res => {
-      showSuccess();
-      fetchInspections(selectedFeatures[0].attributes.GlobalID);
-      document.getElementById("inspectionForm").reset();
-    }).catch(err => { console.error(err); alert("Failed to add inspections"); });
+    }).catch(err => console.error(err));
   });
 
   function showSuccess() {
     const msg = document.getElementById("successMessage");
     msg.style.display = "block";
-    setTimeout(()=>{ msg.style.display="none"; },3000);
+    setTimeout(() => { msg.style.display = "none"; }, 3000);
   }
+
+  // --- Clear selection ---
+  document.getElementById("clearSelectionButton").addEventListener("click", function() {
+    graphicsLayer.removeAll();
+    selectedFeatures = [];
+    hidePanel();
+  });
+
+  // --- Locate widget ---
+  const locate = new Locate({ view: view });
+  view.ui.add(locate, "bottom-left");
+
 });
 </script>
 </body>

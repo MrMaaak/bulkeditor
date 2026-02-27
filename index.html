@@ -5,26 +5,131 @@
   <title>Add Bulk Related Records</title>
   <link rel="stylesheet" href="https://js.arcgis.com/4.26/esri/themes/light/main.css">
   <script src="https://js.arcgis.com/4.26/"></script>
-  <style>
-    html, body, #viewDiv { height: 100%; margin: 0; padding: 0; }
-    #sidePanel {
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 320px;
-      height: 100%;
-      background: #fff;
-      box-shadow: -2px 0 5px rgba(0,0,0,0.3);
-      padding: 15px;
-      overflow-y: auto;
-      display: none;
-      z-index: 10;
-    }
-    #closePanel { cursor: pointer; float: right; color: red; }
-    label { display: block; margin-top: 10px; font-weight: bold; }
-    input, select, button { width: 100%; margin-top: 5px; }
-    #count { margin: 10px 0; font-weight: bold; color: #0079c1; }
-  </style>
+<style>
+  /* Base */
+  html, body, #viewDiv {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  }
+
+  /* Side panel */
+  #sidePanel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 360px;
+    height: 100%;
+    background: #fff;
+    box-shadow: -4px 0 12px rgba(0,0,0,0.2);
+    padding: 25px 20px;
+    overflow-y: auto;
+    display: none;
+    z-index: 10;
+    border-left: 1px solid #ddd;
+    border-radius: 0 0 0 8px;
+  }
+
+  #sidePanel h3 {
+    margin-top: 0;
+    font-size: 1.5rem;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+  }
+
+  #closePanel {
+    cursor: pointer;
+    float: right;
+    font-size: 1.2rem;
+    color: #c0392b;
+    font-weight: bold;
+    margin-top: -5px;
+  }
+
+  /* Selected count */
+  #count {
+    margin: 15px 0;
+    font-weight: 600;
+    color: #0079c1;
+    font-size: 1.1rem;
+  }
+
+  /* Form labels and inputs */
+  label {
+    display: block;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #555;
+  }
+
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  input:focus, select:focus {
+    outline: none;
+    border-color: #0079c1;
+    box-shadow: 0 0 6px rgba(0,121,193,0.3);
+  }
+
+  /* Submit button */
+  #submitBtn {
+    margin-top: 25px;
+    width: 100%;
+    padding: 12px;
+    background: #0079c1;
+    color: #fff;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+
+  #submitBtn:hover {
+    background: #005a8c;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  /* Reset form button styles */
+  button:focus {
+    outline: none;
+  }
+
+  /* Table styling for previous inspections (if used) */
+  #inspectionsTable {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+
+  #inspectionsTable th, #inspectionsTable td {
+    padding: 10px;
+    border: 1px solid #eee;
+    text-align: left;
+    font-size: 0.95rem;
+  }
+
+  #inspectionsTable th {
+    background-color: #f4f6f8;
+    font-weight: 600;
+    color: #333;
+  }
+
+  #inspectionsTable tr:nth-child(even) {
+    background-color: #fafafa;
+  }
+</style>
 </head>
 <body>
 <div id="viewDiv"></div>

@@ -7,80 +7,38 @@
 <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css" />
 <style>
   html, body, #viewDiv {
-    padding: 0;
-    margin: 0;
-    height: 100%;
-    width: 100%;
+    padding:0; margin:0; height:100%; width:100%;
   }
 
   #sidePanel {
     position: fixed;
-    top: 0;
-    right: -100%;
-    width: 330px;
-    height: 100%;
-    background: white;
+    top:0; right:-100%;
+    width: 350px; height:100%;
+    background:white;
     box-shadow: 0 0 10px rgba(0,0,0,0.3);
     transition: right 0.5s;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
     padding: 10px;
     z-index: 100;
+    display: flex;
+    flex-direction: column;
   }
 
-  #inspectionForm label {
-    display: block;
-    margin-top: 8px;
-  }
-
-  #inspectionForm input, #inspectionForm select {
-    width: 100%;
-    padding: 5px;
-    margin-top: 2px;
-  }
-
+  #inspectionForm label { display:block; margin-top:8px; }
+  #inspectionForm input, #inspectionForm select { width:100%; padding:5px; margin-top:2px; }
   #inspectionForm button {
-    margin-top: 10px;
-    width: calc(50% - 5px);
-    padding: 10px;
-    border: none;
-    cursor: pointer;
-    background-color: #007BFF;
-    color: white;
+    margin-top:10px; width: calc(50% - 5px); padding:10px; border:none; cursor:pointer;
+    background:#007BFF; color:white;
   }
+  #inspectionForm button:hover { background:#0056b3; }
 
-  #inspectionForm button:hover {
-    background-color: #0056b3;
-  }
-
-  #infoTable {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-  }
-
-  #infoTable th, #infoTable td {
-    padding: 6px;
-    border: 1px solid #ddd;
-    text-align: left;
-  }
-
-  #infoTable th {
-    background-color: #f2f2f2;
-  }
+  #infoTable { width:100%; border-collapse:collapse; margin-top:10px; }
+  #infoTable th, #infoTable td { padding:6px; border:1px solid #ddd; text-align:left; }
+  #infoTable th { background:#f2f2f2; }
 
   #successMessage {
-    background-color: #4CAF50;
-    color: white;
-    padding: 10px;
-    text-align: center;
-    position: fixed;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 1000;
-    display: none;
+    background:#4CAF50; color:white; padding:10px; text-align:center;
+    position:fixed; top:0; left:50%; transform:translateX(-50%);
+    z-index:1000; display:none;
   }
 </style>
 </head>
@@ -110,18 +68,17 @@
       <option value="No">No</option>
     </select>
 
-    <input type="hidden" id="relfeatureglobalid">
-
-    <div style="display: flex; justify-content: space-between;">
+    <div style="display:flex; justify-content:space-between;">
       <button type="submit">Submit</button>
       <button type="button" id="clearSelectionButton">Clear Selection</button>
     </div>
   </form>
 
-  <h2>Previous Inspections</h2>
+  <h2>Selected Features' Inspections</h2>
   <table id="infoTable">
     <thead>
       <tr>
+        <th>Feature ID</th>
         <th>Inspection Date</th>
         <th>Condition Score</th>
         <th>Requires Maintenance</th>
@@ -139,73 +96,72 @@ require([
   "esri/Map",
   "esri/views/MapView",
   "esri/layers/FeatureLayer",
-  "esri/widgets/Sketch/Sketch",
   "esri/layers/GraphicsLayer",
+  "esri/widgets/Sketch/Sketch",
   "esri/Graphic",
   "esri/geometry/geometryEngine",
   "esri/widgets/Locate"
-], function(Map, MapView, FeatureLayer, Sketch, GraphicsLayer, Graphic, geometryEngine, Locate) {
+], function(Map, MapView, FeatureLayer, GraphicsLayer, Sketch, Graphic, geometryEngine, Locate) {
 
   // --- CONFIG ---
-  const featureLayerUrl = "https://services3.arcgis.com/HYKqs4HgCmzergJk/arcgis/rest/services/TMT_VIEW_AoteaCombinedCatTrapData_/FeatureServer/0";
+  const assetLayerUrl = "https://services3.arcgis.com/HYKqs4HgCmzergJk/arcgis/rest/services/TMT_VIEW_AoteaCombinedCatTrapData_/FeatureServer/0";
   const inspectionLayerUrl = "https://services3.arcgis.com/HYKqs4HgCmzergJk/arcgis/rest/services/TMT_VIEW_AoteaCombinedCatTrapData_/FeatureServer/1";
 
-  const featureLayer = new FeatureLayer({ url: featureLayerUrl });
+  const assetLayer = new FeatureLayer({ url: assetLayerUrl });
   const inspectionLayer = new FeatureLayer({ url: inspectionLayerUrl });
 
   const graphicsLayer = new GraphicsLayer();
 
   const map = new Map({
     basemap: "topo-vector",
-    layers: [featureLayer, inspectionLayer, graphicsLayer]
+    layers: [assetLayer, inspectionLayer, graphicsLayer]
   });
 
   const view = new MapView({
     container: "viewDiv",
     map: map,
-    center: [-174.8, -36.8], // adjust to your area
+    center: [-174.8, -36.8],
     zoom: 10
   });
 
+  // Sketch tool for selection
   const sketch = new Sketch({
     view: view,
     layer: graphicsLayer,
     availableCreateTools: ["polygon", "rectangle"]
   });
-
   view.ui.add(sketch, "top-right");
 
   let selectedFeatures = [];
 
   // --- Selection ---
-  sketch.on("create", function(evt) {
-    if(evt.state === "complete") {
+  sketch.on("create", function(evt){
+    if(evt.state === "complete"){
       selectFeatures(evt.graphic.geometry);
     }
   });
 
-  function selectFeatures(geometry) {
-    const query = featureLayer.createQuery();
+  function selectFeatures(geometry){
+    const query = assetLayer.createQuery();
     query.geometry = geometry;
     query.spatialRelationship = "intersects";
     query.returnGeometry = true;
     query.outFields = ["GlobalID"];
 
-    featureLayer.queryFeatures(query).then(res => {
+    assetLayer.queryFeatures(query).then(res => {
       selectedFeatures = res.features;
       graphicsLayer.removeAll();
 
-      if(selectedFeatures.length) {
-        selectedFeatures.forEach(f => {
+      if(selectedFeatures.length){
+        // highlight selected
+        selectedFeatures.forEach(f=>{
           graphicsLayer.add(new Graphic({
-            geometry: f.geometry,
-            symbol: { type:"simple-marker", color:"red", size:8 }
+            geometry:f.geometry,
+            symbol:{ type:"simple-marker", color:"red", size:8 }
           }));
         });
-
         showPanel();
-        document.getElementById("relfeatureglobalid").value = selectedFeatures[0].attributes.GlobalID;
-        fetchInspections(selectedFeatures[0].attributes.GlobalID);
+        fetchInspectionsForSelected();
       } else {
         hidePanel();
         alert("No features selected");
@@ -213,26 +169,30 @@ require([
     });
   }
 
-  // --- Side Panel ---
-  function showPanel() { document.getElementById("sidePanel").style.right = "0"; }
-  function hidePanel() { document.getElementById("sidePanel").style.right = "-100%"; }
+  // --- Side panel ---
+  function showPanel(){ document.getElementById("sidePanel").style.right="0"; }
+  function hidePanel(){ document.getElementById("sidePanel").style.right="-100%"; }
 
-  // --- Fetch inspections ---
-  function fetchInspections(globalID) {
+  // --- Fetch inspections for all selected features ---
+  function fetchInspectionsForSelected(){
+    const tbody = document.querySelector("#infoTable tbody");
+    tbody.innerHTML = "";
+
+    if(!selectedFeatures.length) return;
+
+    const globalIds = selectedFeatures.map(f=>`'${f.attributes.GlobalID}'`).join(",");
     const query = inspectionLayer.createQuery();
-    query.where = "relfeatureglobalid = '" + globalID + "'";
+    query.where = `relfeatureglobalid IN (${globalIds})`;
     query.returnGeometry = false;
-    query.outFields = ["inspection_date", "condition_score", "requires_maintenance"];
+    query.outFields = ["inspection_date","condition_score","requires_maintenance","relfeatureglobalid"];
 
-    inspectionLayer.queryFeatures(query).then(res => {
-      const tbody = document.querySelector("#infoTable tbody");
-      tbody.innerHTML = "";
-
-      if(res.features.length) {
-        res.features.sort((a,b) => new Date(b.attributes.inspection_date) - new Date(a.attributes.inspection_date));
-        res.features.forEach(f => {
+    inspectionLayer.queryFeatures(query).then(res=>{
+      if(res.features.length){
+        res.features.sort((a,b)=> new Date(b.attributes.inspection_date)-new Date(a.attributes.inspection_date));
+        res.features.forEach(f=>{
           const row = document.createElement("tr");
           row.innerHTML = `
+            <td>${f.attributes.relfeatureglobalid}</td>
             <td>${formatDate(f.attributes.inspection_date)}</td>
             <td>${f.attributes.condition_score}</td>
             <td>${f.attributes.requires_maintenance}</td>
@@ -240,52 +200,51 @@ require([
           tbody.appendChild(row);
         });
       } else {
-        tbody.innerHTML = "<tr><td colspan='3'>No related inspections found.</td></tr>";
+        tbody.innerHTML = "<tr><td colspan='4'>No inspections found</td></tr>";
       }
     });
   }
 
-  function formatDate(d) {
-    if(!d) return "";
-    return new Date(d).toLocaleDateString();
-  }
+  function formatDate(d){ return d ? new Date(d).toLocaleDateString() : ""; }
 
-  // --- Add new inspection ---
+  // --- Add new inspection for all selected features ---
   document.getElementById("inspectionForm").addEventListener("submit", function(e){
     e.preventDefault();
+    if(!selectedFeatures.length){ alert("No features selected"); return; }
+
     const inspectionDate = document.getElementById("inspectionDate").value;
     const conditionScore = document.getElementById("conditionScore").value;
     const requiresMaintenance = document.getElementById("requiresMaintenance").value;
-    const relfeatureglobalid = document.getElementById("relfeatureglobalid").value;
 
-    inspectionLayer.applyEdits({
-      addFeatures: [{
-        attributes: {
+    const featuresToAdd = selectedFeatures.map(f=>{
+      return {
+        attributes:{
           inspection_date: inspectionDate,
           condition_score: conditionScore,
           requires_maintenance: requiresMaintenance,
-          relfeatureglobalid: relfeatureglobalid
+          relfeatureglobalid: f.attributes.GlobalID
         }
-      }]
-    }).then(res => {
-      if(res.addFeatureResults.length) {
+      };
+    });
+
+    inspectionLayer.applyEdits({ addFeatures: featuresToAdd })
+      .then(res=>{
         showSuccess();
         document.getElementById("inspectionForm").reset();
-        fetchInspections(relfeatureglobalid);
-      }
-    }).catch(err => console.error(err));
+        fetchInspectionsForSelected();
+      }).catch(err=>console.error(err));
   });
 
-  function showSuccess() {
+  function showSuccess(){
     const msg = document.getElementById("successMessage");
-    msg.style.display = "block";
-    setTimeout(() => { msg.style.display = "none"; }, 3000);
+    msg.style.display="block";
+    setTimeout(()=>{ msg.style.display="none"; },3000);
   }
 
   // --- Clear selection ---
-  document.getElementById("clearSelectionButton").addEventListener("click", function() {
+  document.getElementById("clearSelectionButton").addEventListener("click", function(){
     graphicsLayer.removeAll();
-    selectedFeatures = [];
+    selectedFeatures=[];
     hidePanel();
   });
 

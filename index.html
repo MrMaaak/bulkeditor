@@ -1,242 +1,225 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
-<title>Bulk Asset Inspections</title>
-<link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css" />
-<style>
-  html, body, #viewDiv { padding:0; margin:0; height:100%; width:100%; }
-
-  #sidePanel {
-    position: fixed;
-    top:0; right:-100%;
-    width:350px; height:100%;
-    background:white;
-    box-shadow:0 0 10px rgba(0,0,0,0.3);
-    transition:right 0.5s;
-    padding:10px;
-    display:flex;
-    flex-direction:column;
-    z-index:100;
-  }
-
-  #inspectionForm label { display:block; margin-top:8px; }
-  #inspectionForm input, #inspectionForm select { width:100%; padding:5px; margin-top:2px; }
-  #inspectionForm button {
-    margin-top:10px; width: calc(50% - 5px); padding:10px; border:none; cursor:pointer;
-    background:#007BFF; color:white;
-  }
-  #inspectionForm button:hover { background:#0056b3; }
-
-  #infoTable { width:100%; border-collapse:collapse; margin-top:10px; }
-  #infoTable th, #infoTable td { padding:6px; border:1px solid #ddd; text-align:left; }
-  #infoTable th { background:#f2f2f2; }
-
-  #successMessage {
-    background:#4CAF50; color:white; padding:10px; text-align:center;
-    position:fixed; top:0; left:50%; transform:translateX(-50%);
-    z-index:1000; display:none;
-  }
-</style>
+  <meta charset="UTF-8">
+  <title>Add Related Records with Highlight</title>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.26/esri/themes/light/main.css">
+  <script src="https://js.arcgis.com/4.26/"></script>
+  <style>
+    html, body, #viewDiv { height: 100%; margin: 0; padding: 0; }
+    #sidePanel {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 320px;
+      height: 100%;
+      background: #fff;
+      box-shadow: -2px 0 5px rgba(0,0,0,0.3);
+      padding: 15px;
+      overflow-y: auto;
+      display: none;
+      z-index: 10;
+    }
+    #closePanel { cursor: pointer; float: right; color: red; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input, select, button { width: 100%; margin-top: 5px; }
+    #count { margin: 10px 0; font-weight: bold; color: #0079c1; }
+  </style>
 </head>
 <body>
 <div id="viewDiv"></div>
 
 <div id="sidePanel">
-  <h2>Add New Inspection</h2>
-  <form id="inspectionForm">
-    <label for="inspectionDate">Inspection Date:</label>
-    <input type="date" id="inspectionDate" required>
+  <span id="closePanel">✖</span>
+  <h3>Add inspection records</h3>
+  <div id="count">0 traps selected</div>
 
-    <label for="conditionScore">Condition Score:</label>
-    <select id="conditionScore" required>
-      <option value="">Select</option>
-      <option value="1">1 - Very Poor</option>
-      <option value="2">2 - Poor</option>
-      <option value="3">3 - OK</option>
-      <option value="4">4 - Good</option>
-      <option value="5">5 - Very Good</option>
+  <form id="relatedForm">
+    <label>Date Checked</label>
+    <input type="datetime-local" id="DateChecked">
+
+    <label>Trap State</label>
+    <select id="TrapState_1">
+      <option value="">--Select--</option>
+      <option value="Set">Set</option>
+      <option value="SprungCaught">SprungCaught</option>
+      <option value="SprungEmpty">SprungEmpty</option>
+      <option value="Closed">Closed</option>
     </select>
 
-    <label for="requiresMaintenance">Requires Maintenance:</label>
-    <select id="requiresMaintenance" required>
-      <option value="">Select</option>
+    <label>Trap Caught</label>
+    <select id="TrapCaught_1">
+      <option value="">--Select--</option>
+      <option value="Cat">Cat</option>
+      <option value="Rabbit">Rabbit</option>
+      <option value="Rat">Rat</option>
+      <option value="Pig">Pig</option>
+      <option value="Rail">Rail</option>
+      <option value="Harrier">Harrier</option>
+      <option value="OtherBird">OtherBird</option>
+      <option value="Other">Other</option>
+    </select>
+
+    <label>Leave trap closed?</label>
+    <select id="ClosingTrap">
+      <option value="">--Select--</option>
       <option value="Yes">Yes</option>
       <option value="No">No</option>
     </select>
-
-    <div style="display:flex; justify-content:space-between;">
-      <button type="submit">Submit</button>
-      <button type="button" id="clearSelectionButton">Clear Selection</button>
-    </div>
   </form>
 
-  <h2>Selected Features' Inspections</h2>
-  <table id="infoTable">
-    <thead>
-      <tr>
-        <th>Feature ID</th>
-        <th>Inspection Date</th>
-        <th>Condition Score</th>
-        <th>Requires Maintenance</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <button id="submitBtn">Add records</button>
 </div>
 
-<div id="successMessage">New inspection added successfully!</div>
-
-<script src="https://js.arcgis.com/4.28/"></script>
 <script>
 require([
   "esri/WebMap",
   "esri/views/MapView",
-  "esri/layers/FeatureLayer",
   "esri/widgets/Sketch/SketchViewModel",
-  "esri/Graphic",
-  "esri/geometry/geometryEngine",
-  "esri/widgets/Locate"
-], function(WebMap, MapView, FeatureLayer, SketchViewModel, Graphic, geometryEngine, Locate) {
+  "esri/layers/GraphicsLayer"
+], function(WebMap, MapView, SketchViewModel, GraphicsLayer) {
 
-  const WEBMAP_ID = "552cdf8d85234994a53339f6fbacfa3b"; // your webmap
-  const ASSET_LAYER_URL = "https://services3.arcgis.com/HYKqs4HgCmzergJk/arcgis/rest/services/TMT_VIEW_AoteaCombinedCatTrapData_/FeatureServer/0";
-  const INSPECTION_LAYER_URL = "https://services3.arcgis.com/HYKqs4HgCmzergJk/arcgis/rest/services/TMT_VIEW_AoteaCombinedCatTrapData_/FeatureServer/1";
+  const webmap = new WebMap({ portalItem: { id: "552cdf8d85234994a53339f6fbacfa3b" } });
 
-  const webmap = new WebMap({ portalItem: { id: WEBMAP_ID } });
-  const view = new MapView({ container:"viewDiv", map:webmap, zoom:12 });
-
-  const assetLayer = new FeatureLayer({ url: ASSET_LAYER_URL });
-  const inspectionLayer = new FeatureLayer({ url: INSPECTION_LAYER_URL });
-
-  webmap.add(assetLayer);
-  webmap.add(inspectionLayer);
-
-  let selectedFeatures = [];
-  let selectionGraphics = [];
-
-  // Sketch tool to draw selection polygon/rectangle
-  const sketchVM = new SketchViewModel({ view: view, layer: null, defaultUpdateOptions: { tool:"reshape" } });
-
-  sketchVM.on("create", evt => {
-    if(evt.state==="complete"){
-      selectFeatures(evt.graphic.geometry);
-      view.graphics.remove(evt.graphic); // remove drawn polygon
-    }
+  const view = new MapView({
+    container: "viewDiv",
+    map: webmap
   });
 
-  function selectFeatures(geometry){
-    const query = assetLayer.createQuery();
-    query.geometry = geometry;
-    query.spatialRelationship = "intersects";
+  // -------------------------
+  // 1️⃣ Lasso Tool Button
+  // -------------------------
+  const drawBtn = document.createElement("button");
+  drawBtn.innerText = "Lasso Tool";
+  drawBtn.classList.add("esri-widget", "esri-widget--button");
+  drawBtn.style.marginTop = "10px";
+  drawBtn.style.width = "120px";
+  drawBtn.title = "Draw a polygon to select multiple points";
+  view.ui.add(drawBtn, { position: "top-left", index: 1 });
+
+  // -------------------------
+  // 2️⃣ Layers + Selection
+  // -------------------------
+  let trapsLayer, relatedTable, layerView;
+  const highlightLayer = new GraphicsLayer();
+  const selectionLayer = new GraphicsLayer({ visible: false });
+  webmap.addMany([highlightLayer, selectionLayer]);
+
+  view.when(() => {
+    trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === "Cat Traps");
+    relatedTable = webmap.tables.find(t => t.title === "Cat Trapping Data");
+    view.whenLayerView(trapsLayer).then(lv => layerView = lv);
+  });
+
+  let selectedGlobalIDs = [];
+  const countDiv = document.getElementById("count");
+  const sidePanel = document.getElementById("sidePanel");
+
+  function updateCount() {
+    countDiv.innerText = `${selectedGlobalIDs.length} traps selected`;
+  }
+
+  function outlinePoints(globalIDs) {
+    highlightLayer.removeAll();
+    if (!layerView || globalIDs.length === 0) return;
+
+    const query = trapsLayer.createQuery();
+    query.where = `GlobalID IN ('${globalIDs.join("','")}')`;
     query.outFields = ["GlobalID"];
     query.returnGeometry = true;
 
-    assetLayer.queryFeatures(query).then(res => {
-      selectedFeatures = res.features;
-      clearSelectionGraphics();
-      if(selectedFeatures.length){
-        selectedFeatures.forEach(f=>{
-          const g = new Graphic({ geometry:f.geometry, symbol:{ type:"simple-marker", color:"red", size:8 } });
-          view.graphics.add(g);
-          selectionGraphics.push(g);
+    trapsLayer.queryFeatures(query).then(result => {
+      result.features.forEach(f => {
+        highlightLayer.add({
+          geometry: f.geometry,
+          symbol: {
+            type: "simple-marker",
+            style: "circle",
+            color: [0,0,0,0],
+            size: 18,
+            outline: { color: [255,0,0,1], width: 2 }
+          }
         });
-        showPanel();
-        fetchInspections();
-      } else {
-        hidePanel();
-        alert("No features selected");
-      }
+      });
     });
   }
 
-  function fetchInspections(){
-    const tbody = document.querySelector("#infoTable tbody");
-    tbody.innerHTML = "";
+  // -------------------------
+  // 3️⃣ Click selection
+  // -------------------------
+  view.on("click", async (event) => {
+    const hit = await view.hitTest(event);
+    const graphic = hit.results.find(r => r.graphic.layer === trapsLayer)?.graphic;
+    if (!graphic) return;
 
-    if(!selectedFeatures.length) return;
+    selectedGlobalIDs = [graphic.attributes.GlobalID];
+    outlinePoints(selectedGlobalIDs);
+    updateCount();
+    sidePanel.style.display = "block";
+    document.getElementById("DateChecked").value = new Date().toISOString().slice(0,16);
+  });
 
-    const ids = selectedFeatures.map(f=>`'${f.attributes.GlobalID}'`).join(",");
-    const query = inspectionLayer.createQuery();
-    query.where = `relfeatureglobalid IN (${ids})`;
-    query.outFields = ["inspection_date","condition_score","requires_maintenance","relfeatureglobalid"];
+  // -------------------------
+  // 4️⃣ Lasso selection
+  // -------------------------
+  const sketchVM = new SketchViewModel({ view, layer: selectionLayer });
+  drawBtn.addEventListener("click", () => {
+    selectedGlobalIDs = [];
+    outlinePoints([]);
+    sketchVM.create("polygon", { mode: "freehand" });
+  });
+
+  sketchVM.on("create", async (event) => {
+    if (event.state !== "complete") return;
+    const query = trapsLayer.createQuery();
+    query.geometry = event.graphic.geometry;
+    query.spatialRelationship = "intersects";
+    query.outFields = ["GlobalID"];
     query.returnGeometry = false;
 
-    inspectionLayer.queryFeatures(query).then(res=>{
-      if(res.features.length){
-        res.features.sort((a,b)=> new Date(b.attributes.inspection_date)-new Date(a.attributes.inspection_date));
-        res.features.forEach(f=>{
-          const row = document.createElement("tr");
-          row.innerHTML = `<td>${f.attributes.relfeatureglobalid}</td>
-                           <td>${formatDate(f.attributes.inspection_date)}</td>
-                           <td>${f.attributes.condition_score}</td>
-                           <td>${f.attributes.requires_maintenance}</td>`;
-          tbody.appendChild(row);
-        });
-      } else {
-        tbody.innerHTML = "<tr><td colspan='4'>No inspections found</td></tr>";
-      }
-    });
-  }
+    const result = await trapsLayer.queryFeatures(query);
+    if (result.features.length) {
+      selectedGlobalIDs = result.features.map(f => f.attributes.GlobalID);
+      outlinePoints(selectedGlobalIDs);
+      updateCount();
+      sidePanel.style.display = "block";
+      document.getElementById("DateChecked").value = new Date().toISOString().slice(0,16);
+    }
 
-  function formatDate(d){ return d ? new Date(d).toLocaleDateString() : ""; }
-  function showPanel(){ document.getElementById("sidePanel").style.right="0"; }
-  function hidePanel(){ document.getElementById("sidePanel").style.right="-100%"; }
-  function clearSelectionGraphics(){
-    selectionGraphics.forEach(g=>view.graphics.remove(g));
-    selectionGraphics=[];
-  }
-
-  document.getElementById("inspectionForm").addEventListener("submit", e=>{
-    e.preventDefault();
-    if(!selectedFeatures.length){ alert("No features selected"); return; }
-
-    const inspectionDate = document.getElementById("inspectionDate").value;
-    const conditionScore = document.getElementById("conditionScore").value;
-    const requiresMaintenance = document.getElementById("requiresMaintenance").value;
-
-    const featuresToAdd = selectedFeatures.map(f=>{
-      return { attributes:{
-        inspection_date: inspectionDate,
-        condition_score: conditionScore,
-        requires_maintenance: requiresMaintenance,
-        relfeatureglobalid: f.attributes.GlobalID
-      }};
-    });
-
-    inspectionLayer.applyEdits({ addFeatures: featuresToAdd })
-      .then(res=>{
-        showSuccess();
-        document.getElementById("inspectionForm").reset();
-        fetchInspections();
-      }).catch(err=>console.error(err));
+    selectionLayer.removeAll();
+    sketchVM.cancel();
   });
 
-  document.getElementById("clearSelectionButton").addEventListener("click", ()=>{
-    clearSelectionGraphics();
-    selectedFeatures=[];
-    hidePanel();
-  });
+  // -------------------------
+  // 5️⃣ Close panel
+  // -------------------------
+  document.getElementById("closePanel").onclick = () => { sidePanel.style.display = "none"; };
 
-  function showSuccess(){
-    const msg = document.getElementById("successMessage");
-    msg.style.display="block";
-    setTimeout(()=>{ msg.style.display="none"; },3000);
-  }
+  // -------------------------
+  // 6️⃣ Submit records
+  // -------------------------
+  document.getElementById("submitBtn").onclick = async () => {
+    if (!selectedGlobalIDs.length) { alert("Select at least one trap"); return; }
 
-  const locate = new Locate({ view:view });
-  view.ui.add(locate, "bottom-left");
+    const DateChecked = document.getElementById("DateChecked").value;
+    const TrapState_1 = document.getElementById("TrapState_1").value;
+    const TrapCaught_1 = document.getElementById("TrapCaught_1").value;
+    const ClosingTrap = document.getElementById("ClosingTrap").value;
 
-  // Add Sketch tool button
-  const drawBtn = document.createElement("button");
-  drawBtn.innerText="Draw Selection";
-  drawBtn.style.position="absolute";
-  drawBtn.style.top="10px";
-  drawBtn.style.left="10px";
-  drawBtn.style.zIndex=100;
-  drawBtn.onclick = ()=> sketchVM.create("polygon");
-  view.ui.add(drawBtn, "manual");
+    if (!DateChecked || !TrapState_1 || !ClosingTrap) { alert("Please complete required fields"); return; }
+
+    const addFeatures = selectedGlobalIDs.map(guid => ({
+      attributes: { GUID: guid, DateChecked, TrapState_1, TrapCaught_1, ClosingTrap }
+    }));
+
+    await relatedTable.applyEdits({ addFeatures });
+    alert(`Added ${addFeatures.length} records`);
+    selectedGlobalIDs = [];
+    outlinePoints([]);
+    updateCount();
+    sidePanel.style.display = "none";
+    document.getElementById("relatedForm").reset();
+  };
 
 });
 </script>

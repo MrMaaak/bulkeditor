@@ -22,55 +22,9 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   overflow-y:auto;
   display:none;
   z-index:10;
-  border-left:1px solid #ddd;
 }
 
-#message{ 
-  display:none;
-  margin-bottom:10px;
-  padding:8px 10px;
-  border-radius:4px;
-  font-size:14px;
-}
-
-#count{
-  margin:15px 0;
-  font-weight:600;
-  color:#0079c1;
-}
-
-#relatedForm label{
-  display:block;
-  margin-top:15px;
-  margin-bottom:5px;
-  font-weight:600;
-}
-
-#relatedForm input, #relatedForm select{
-  width:100%;
-  padding:8px 10px;
-  border:1px solid #ccc;
-  border-radius:4px;
-  font-size:14px;
-  box-sizing:border-box;
-}
-
-#submitBtn{
-  margin-top:20px;
-  width:100%;
-  padding:12px;
-  background:#0079c1;
-  color:#fff;
-  border:none;
-  border-radius:6px;
-  cursor:pointer;
-  font-size:16px;
-}
-
-#submitBtn:disabled{
-  background:#9e9e9e;
-  cursor:not-allowed;
-}
+#count{ margin:15px 0; font-weight:600; color:#0079c1; }
 
 .mapButton{
   display:block;
@@ -83,8 +37,19 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   cursor:pointer;
   font-size:13px;
 }
-
 .mapButton:hover{ background:#005a8c; }
+
+#submitBtn{
+  width:100%;
+  margin-top:20px;
+  padding:12px;
+  background:#0079c1;
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  font-size:16px;
+}
+#submitBtn:disabled{ background:#9e9e9e; }
 </style>
 </head>
 
@@ -93,30 +58,26 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
 
 <div id="sidePanel">
   <h3>Add Cat Trapping Records</h3>
-
-  <div id="message"></div>
   <div id="count">0 traps selected</div>
 
-  <form id="relatedForm">
-    <label>Date Checked</label>
-    <input type="datetime-local" id="DateChecked">
+  <label>Date Checked</label>
+  <input type="datetime-local" id="DateChecked">
 
-    <label>Trap State</label>
-    <select id="TrapState_1">
-      <option value="">--Select--</option>
-      <option value="Set">Set</option>
-      <option value="SprungCaught">SprungCaught</option>
-      <option value="SprungEmpty">SprungEmpty</option>
-      <option value="Closed">Closed</option>
-    </select>
+  <label>Trap State</label>
+  <select id="TrapState_1">
+    <option value="">--Select--</option>
+    <option value="Set">Set</option>
+    <option value="SprungCaught">SprungCaught</option>
+    <option value="SprungEmpty">SprungEmpty</option>
+    <option value="Closed">Closed</option>
+  </select>
 
-    <label>Leave trap closed?</label>
-    <select id="ClosingTrap">
-      <option value="">--Select--</option>
-      <option value="Yes">Yes</option>
-      <option value="No">No</option>
-    </select>
-  </form>
+  <label>Leave trap closed?</label>
+  <select id="ClosingTrap">
+    <option value="">--Select--</option>
+    <option value="Yes">Yes</option>
+    <option value="No">No</option>
+  </select>
 
   <button id="submitBtn" disabled>Add Records</button>
 </div>
@@ -130,40 +91,30 @@ require([
 ], function(WebMap, MapView, SketchViewModel, GraphicsLayer){
 
   const webmap = new WebMap({
-    portalItem: { id: "552cdf8d85234994a53339f6fbacfa3b" }
+    portalItem:{ id:"552cdf8d85234994a53339f6fbacfa3b" }
   });
 
   const view = new MapView({
-    container: "viewDiv",
-    map: webmap
+    container:"viewDiv",
+    map:webmap
   });
 
   let trapsLayer, relatedTable, layerView;
-  let selectedObjectIds = [];
-  let selectedGlobalIDs = [];
+  let selectedOIDs = [];
+  let selectedGIDs = [];
   let highlightHandle = null;
 
   const sidePanel = document.getElementById("sidePanel");
   const countDiv = document.getElementById("count");
   const submitBtn = document.getElementById("submitBtn");
-  const messageDiv = document.getElementById("message");
 
-  function updateCount(){
-    countDiv.innerText = selectedObjectIds.length + " traps selected";
-    submitBtn.disabled = selectedObjectIds.length === 0;
-  }
-
-  function showMessage(message, type="info", duration=2000){
-    messageDiv.innerText = message;
-    messageDiv.style.display = "block";
-    messageDiv.style.background =
-      type==="success" ? "#e6f4ea" :
-      type==="error" ? "#fdecea" : "#e3f2fd";
-    setTimeout(()=> messageDiv.style.display="none", duration);
+  function updateUI(){
+    countDiv.innerText = selectedOIDs.length + " traps selected";
+    submitBtn.disabled = selectedOIDs.length === 0;
   }
 
   view.when(async () => {
-    trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === "Cat Traps");
+    trapsLayer = webmap.layers.find(l => l.title === "Cat Traps");
     relatedTable = webmap.tables.find(t => t.title === "Cat Trapping Data");
 
     trapsLayer.popupEnabled = false;
@@ -171,139 +122,127 @@ require([
 
     layerView = await view.whenLayerView(trapsLayer);
 
-    /* ---------------- FILTER BUTTON ---------------- */
+    /* -------- FILTER BUTTON -------- */
     let filterOn = false;
-
     const filterBtn = document.createElement("button");
-    filterBtn.innerText = "Filter: InUse + Triggered";
     filterBtn.className = "mapButton";
+    filterBtn.innerText = "Filter: InUse + Triggered";
 
     filterBtn.onclick = () => {
       filterOn = !filterOn;
 
-      if (filterOn) {
-        layerView.filter = {
-          where: "Status = 'InUse' AND Node_StatusID = 'Triggered'"
-        };
-        filterBtn.innerText = "Clear Filter";
-        filterBtn.style.background = "#d32f2f";
-      } else {
-        layerView.filter = null;
-        filterBtn.innerText = "Filter: InUse + Triggered";
-        filterBtn.style.background = "#0079c1";
-      }
+      layerView.filter = filterOn ? {
+        where:"Status = 'InUse' AND Node_StatusID = 'Triggered'"
+      } : null;
+
+      filterBtn.innerText = filterOn ? "Clear Filter" : "Filter: InUse + Triggered";
 
       if (highlightHandle) highlightHandle.remove();
-      highlightHandle = null;
-      selectedObjectIds = [];
-      selectedGlobalIDs = [];
-      updateCount();
+      selectedOIDs = [];
+      selectedGIDs = [];
+      updateUI();
       sidePanel.style.display = "none";
     };
 
     view.ui.add(filterBtn,"top-left");
-    /* ------------------------------------------------ */
+    /* -------------------------------- */
 
     const lassoLayer = new GraphicsLayer();
     view.map.add(lassoLayer);
 
     const sketchVM = new SketchViewModel({
-      view: view,
-      layer: lassoLayer
+      view:view,
+      layer:lassoLayer
     });
 
     const lassoBtn = document.createElement("button");
-    lassoBtn.innerText="Lasso Select";
     lassoBtn.className="mapButton";
-    lassoBtn.onclick = () => sketchVM.create("polygon");
+    lassoBtn.innerText="Lasso Select";
+    lassoBtn.onclick=()=>sketchVM.create("polygon");
 
     const clearBtn = document.createElement("button");
-    clearBtn.innerText="Clear Selection";
     clearBtn.className="mapButton";
-    clearBtn.onclick = () => {
+    clearBtn.innerText="Clear Selection";
+    clearBtn.onclick=()=>{
       if(highlightHandle) highlightHandle.remove();
-      highlightHandle = null;
-      selectedObjectIds = [];
-      selectedGlobalIDs = [];
-      document.getElementById("relatedForm").reset();
-      updateCount();
-      sidePanel.style.display = "none";
+      selectedOIDs=[];
+      selectedGIDs=[];
+      updateUI();
+      sidePanel.style.display="none";
     };
 
     view.ui.add(lassoBtn,"top-left");
     view.ui.add(clearBtn,"top-left");
 
-    sketchVM.on("create", async event => {
-      if(event.state !== "complete") return;
+    /* -------- LASSO SELECTION -------- */
+    sketchVM.on("create", async e=>{
+      if(e.state!=="complete") return;
 
-      const query = trapsLayer.createQuery();
-      query.geometry = event.graphic.geometry;
-      query.spatialRelationship = "intersects";
-      query.outFields = ["OBJECTID","GlobalID"];
-      query.returnGeometry = false;
+      const q = layerView.createQuery();
+      q.geometry = e.graphic.geometry;
+      q.spatialRelationship="intersects";
+      q.outFields=["OBJECTID","GlobalID"];
+      q.returnGeometry=false;
 
-      const results = await layerView.queryFeatures(query);
+      const res = await layerView.queryFeatures(q);
 
-      results.features.forEach(f => {
+      res.features.forEach(f=>{
         const oid = f.attributes[trapsLayer.objectIdField];
         const gid = f.attributes.GlobalID;
-        if(!selectedObjectIds.includes(oid) && gid){
-          selectedObjectIds.push(oid);
-          selectedGlobalIDs.push(gid);
+        if(!selectedOIDs.includes(oid)){
+          selectedOIDs.push(oid);
+          selectedGIDs.push(gid);
         }
       });
 
       if(highlightHandle) highlightHandle.remove();
-      highlightHandle = layerView.highlight(selectedObjectIds);
+      highlightHandle = layerView.highlight(selectedOIDs);
 
-      updateCount();
-      sidePanel.style.display = "block";
+      updateUI();
+      sidePanel.style.display="block";
       lassoLayer.removeAll();
     });
   });
 
-  view.on("click", async event => {
-    const hit = await view.hitTest(event, { include: [trapsLayer] });
+  /* -------- CLICK SELECTION -------- */
+  view.on("click", async e=>{
+    const hit = await view.hitTest(e,{ include:[trapsLayer] });
     if(!hit.results.length) return;
 
-    const graphic = hit.results[0].graphic;
-    const oid = graphic.attributes[trapsLayer.objectIdField];
-    const gid = graphic.attributes.GlobalID;
+    const g = hit.results[0].graphic;
+    const oid = g.attributes[trapsLayer.objectIdField];
+    const gid = g.attributes.GlobalID;
 
-    if(!selectedObjectIds.includes(oid) && gid){
-      selectedObjectIds.push(oid);
-      selectedGlobalIDs.push(gid);
+    if(!selectedOIDs.includes(oid)){
+      selectedOIDs.push(oid);
+      selectedGIDs.push(gid);
     }
 
     if(highlightHandle) highlightHandle.remove();
-    highlightHandle = layerView.highlight(selectedObjectIds);
+    highlightHandle = layerView.highlight(selectedOIDs);
 
-    updateCount();
-    sidePanel.style.display = "block";
+    updateUI();
+    sidePanel.style.display="block";
   });
 
-  submitBtn.onclick = async () => {
-    if(!selectedGlobalIDs.length){
-      showMessage("Select at least one trap","error");
-      return;
-    }
-
-    const addFeatures = selectedGlobalIDs.map(gid => ({
+  /* -------- SUBMIT -------- */
+  submitBtn.onclick = async ()=>{
+    const adds = selectedGIDs.map(gid=>({
       attributes:{
-        GUID: gid,
-        DateChecked: document.getElementById("DateChecked").value,
-        TrapState_1: document.getElementById("TrapState_1").value,
-        ClosingTrap: document.getElementById("ClosingTrap").value
+        GUID:gid,
+        DateChecked:DateChecked.value,
+        TrapState_1:TrapState_1.value,
+        ClosingTrap:ClosingTrap.value
       }
     }));
 
-    const result = await relatedTable.applyEdits({ addFeatures });
-    showMessage("Added "+addFeatures.length+" records","success");
+    await relatedTable.applyEdits({ addFeatures:adds });
 
     if(highlightHandle) highlightHandle.remove();
-    selectedObjectIds=[];
-    selectedGlobalIDs=[];
-    updateCount();
+    selectedOIDs=[];
+    selectedGIDs=[];
+    updateUI();
+    sidePanel.style.display="none";
   };
 });
 </script>

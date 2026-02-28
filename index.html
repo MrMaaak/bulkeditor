@@ -25,18 +25,18 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   border-left:1px solid #ddd;
 }
 
+#message{ 
+  display:none;
+  margin-bottom:10px;
+  padding:8px 10px;
+  border-radius:4px;
+  font-size:14px;
+}
+
 #count{
   margin:15px 0;
   font-weight:600;
   color:#0079c1;
-}
-
-#messageBox{
-  display:none;
-  margin-bottom:15px;
-  padding:10px;
-  border-radius:4px;
-  font-size:14px;
 }
 
 #relatedForm label{
@@ -93,7 +93,10 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
 
 <div id="sidePanel">
   <h3>Add Cat Trapping Records</h3>
-  <div id="messageBox"></div>
+
+  <!-- Message box -->
+  <div id="message"></div>
+
   <div id="count">0 traps selected</div>
 
   <form id="relatedForm">
@@ -145,43 +148,38 @@ require([
   const sidePanel = document.getElementById("sidePanel");
   const countDiv = document.getElementById("count");
   const submitBtn = document.getElementById("submitBtn");
-  const messageBox = document.getElementById("messageBox");
+  const messageDiv = document.getElementById("message");
 
   function updateCount(){
     countDiv.innerText = selectedObjectIds.length + " traps selected";
+    countDiv.style.color = "#0079c1";
+    countDiv.style.fontWeight = "600";
     submitBtn.disabled = selectedObjectIds.length === 0;
   }
 
-  function showMessage(message, type="info"){
-    messageBox.innerText = message;
-    messageBox.style.display = "block";
+  function showMessage(message, type="info", duration=2000){
+    messageDiv.innerText = message;
+    messageDiv.style.display = "block";
 
-    if(type==="success"){
-      messageBox.style.background="#e6f4ea";
-      messageBox.style.color="#1b5e20";
-      messageBox.style.border="1px solid #a5d6a7";
+    if(type === "success"){
+      messageDiv.style.background="#e6f4ea";
+      messageDiv.style.color="#1b5e20";
+      messageDiv.style.border="1px solid #a5d6a7";
+    } else if(type === "error"){
+      messageDiv.style.background="#fdecea";
+      messageDiv.style.color="#b71c1c";
+      messageDiv.style.border="1px solid #f5c6cb";
     } else {
-      messageBox.style.background="#fdecea";
-      messageBox.style.color="#b71c1c";
-      messageBox.style.border="1px solid #f5c6cb";
+      messageDiv.style.background="#e3f2fd";
+      messageDiv.style.color="#0d47a1";
+      messageDiv.style.border="1px solid #90caf9";
     }
-  }
 
-  function clearAll(){
-    selectedObjectIds = [];
-    selectedGlobalIDs = [];
-    if(highlightHandle) highlightHandle.remove();
-    highlightHandle = null;
-    document.getElementById("relatedForm").reset();
-    updateCount();
-    setTimeout(()=>{
-      sidePanel.style.display="none";
-      messageBox.style.display="none";
-    },1500);
+    // Auto-hide after duration
+    setTimeout(()=>{ messageDiv.style.display = "none"; }, duration);
   }
 
   view.when(async () => {
-
     trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === "Cat Traps");
     relatedTable = webmap.tables.find(t => t.title === "Cat Trapping Data");
 
@@ -194,50 +192,60 @@ require([
     view.map.add(lassoLayer);
 
     const sketchVM = new SketchViewModel({
-      view:view,
-      layer:lassoLayer,
-      polygonSymbol:{
-        type:"simple-fill",
-        color:[0,0,255,0.1],
-        outline:{color:[0,0,255],width:1}
+      view: view,
+      layer: lassoLayer,
+      polygonSymbol: {
+        type: "simple-fill",
+        color: [0, 0, 255, 0.1],
+        outline: { color: [0,0,255], width:1 }
       }
     });
 
     const lassoBtn = document.createElement("button");
     lassoBtn.innerText="Lasso Select";
     lassoBtn.className="mapButton";
-    lassoBtn.onclick=()=>sketchVM.create("polygon");
+    lassoBtn.onclick = () => sketchVM.create("polygon");
 
-    const clearBtn=document.createElement("button");
+    const clearBtn = document.createElement("button");
     clearBtn.innerText="Clear Selection";
     clearBtn.className="mapButton";
-    clearBtn.onclick=clearAll;
+    clearBtn.onclick = () => {
+      if(highlightHandle) highlightHandle.remove();
+      highlightHandle = null;
+      selectedObjectIds = [];
+      selectedGlobalIDs = [];
+      document.getElementById("relatedForm").reset();
+      updateCount();
+      sidePanel.style.display = "none";
+    };
 
     view.ui.add(lassoBtn,"top-left");
     view.ui.add(clearBtn,"top-left");
 
-    sketchVM.on("create", async event=>{
-      if(event.state!=="complete") return;
+    sketchVM.on("create", async event => {
+      if(event.state !== "complete") return;
 
-      const query=trapsLayer.createQuery();
-      query.geometry=event.graphic.geometry;
-      query.spatialRelationship="intersects";
-      query.outFields=["OBJECTID"];
+      const polygon = event.graphic.geometry;
+      const query = trapsLayer.createQuery();
+      query.geometry = polygon;
+      query.spatialRelationship = "intersects";
+      query.outFields = ["OBJECTID"];
+      query.returnGeometry = false;
 
-      const results=await layerView.queryFeatures(query);
+      const results = await layerView.queryFeatures(query);
 
       for(const f of results.features){
-        const objectId=f.attributes[trapsLayer.objectIdField];
+        const objectId = f.attributes[trapsLayer.objectIdField];
 
-        const fullQuery=trapsLayer.createQuery();
-        fullQuery.objectIds=[objectId];
-        fullQuery.outFields=["GlobalID"];
+        const fullQuery = trapsLayer.createQuery();
+        fullQuery.objectIds = [objectId];
+        fullQuery.outFields = ["GlobalID"];
+        fullQuery.returnGeometry = false;
 
-        const fullFeature=(await trapsLayer.queryFeatures(fullQuery)).features[0];
+        const fullFeature = (await trapsLayer.queryFeatures(fullQuery)).features[0];
         if(!fullFeature) continue;
 
-        const globalId=fullFeature.attributes.GlobalID;
-
+        const globalId = fullFeature.attributes.GlobalID;
         if(!selectedObjectIds.includes(objectId) && globalId){
           selectedObjectIds.push(objectId);
           selectedGlobalIDs.push(globalId);
@@ -245,35 +253,34 @@ require([
       }
 
       if(highlightHandle) highlightHandle.remove();
-      highlightHandle=layerView.highlight(selectedObjectIds);
+      highlightHandle = layerView.highlight(selectedObjectIds);
 
       updateCount();
-      sidePanel.style.display="block";
+      sidePanel.style.display = "block";
 
-      const dateInput=document.getElementById("DateChecked");
-      if(!dateInput.value)
-        dateInput.value=new Date().toISOString().slice(0,16);
+      const dateInput = document.getElementById("DateChecked");
+      if(!dateInput.value) dateInput.value = new Date().toISOString().slice(0,16);
 
       lassoLayer.removeAll();
     });
-
   });
 
-  view.on("click", async event=>{
-    const hit=await view.hitTest(event,{include:[trapsLayer]});
+  view.on("click", async event => {
+    const hit = await view.hitTest(event, { include: [trapsLayer] });
     if(!hit.results.length) return;
 
-    const graphic=hit.results[0].graphic;
-    const objectId=graphic.attributes[trapsLayer.objectIdField];
+    const graphic = hit.results[0].graphic;
+    const objectId = graphic.attributes[trapsLayer.objectIdField];
 
-    const query=trapsLayer.createQuery();
-    query.objectIds=[objectId];
-    query.outFields=["GlobalID"];
+    const query = trapsLayer.createQuery();
+    query.objectIds = [objectId];
+    query.outFields = ["GlobalID"];
+    query.returnGeometry = false;
 
-    const result=await trapsLayer.queryFeatures(query);
+    const result = await trapsLayer.queryFeatures(query);
     if(!result.features.length) return;
 
-    const globalId=result.features[0].attributes.GlobalID;
+    const globalId = result.features[0].attributes.GlobalID;
 
     if(!selectedObjectIds.includes(objectId) && globalId){
       selectedObjectIds.push(objectId);
@@ -281,60 +288,62 @@ require([
     }
 
     if(highlightHandle) highlightHandle.remove();
-    highlightHandle=layerView.highlight(selectedObjectIds);
+    highlightHandle = layerView.highlight(selectedObjectIds);
 
     updateCount();
-    sidePanel.style.display="block";
+    sidePanel.style.display = "block";
 
-    const dateInput=document.getElementById("DateChecked");
-    if(!dateInput.value)
-      dateInput.value=new Date().toISOString().slice(0,16);
+    const dateInput = document.getElementById("DateChecked");
+    if(!dateInput.value) dateInput.value = new Date().toISOString().slice(0,16);
   });
 
-  submitBtn.onclick=async ()=>{
+  submitBtn.onclick = async () => {
     if(!selectedGlobalIDs.length){
       showMessage("Select at least one trap","error");
       return;
     }
 
-    const dateInput=document.getElementById("DateChecked").value;
-    const trapState=document.getElementById("TrapState_1").value;
-    const closingTrap=document.getElementById("ClosingTrap").value;
+    const dateInput = document.getElementById("DateChecked").value;
+    const trapState = document.getElementById("TrapState_1").value;
+    const closingTrap = document.getElementById("ClosingTrap").value;
 
     if(!dateInput || !trapState || !closingTrap){
       showMessage("Complete required fields","error");
       return;
     }
 
-    submitBtn.disabled=true;
+    submitBtn.disabled = true;
 
-    const addFeatures=selectedGlobalIDs.map(guid=>({
-      attributes:{
-        GUID:guid,
-        DateChecked:dateInput,
-        TrapState_1:trapState,
-        ClosingTrap:closingTrap
-      }
+    const addFeatures = selectedGlobalIDs.map(guid => ({
+      attributes: { GUID: guid, DateChecked: dateInput, TrapState_1: trapState, ClosingTrap: closingTrap }
     }));
 
-    try{
-      const result=await relatedTable.applyEdits({addFeatures});
-      const failed=result.addFeatureResults.filter(r=>r.error!=null);
+    try {
+      const result = await relatedTable.applyEdits({ addFeatures });
+      const failed = result.addFeatureResults.filter(r => r.error != null);
 
-      if(failed.length===0){
-        showMessage("Successfully added "+addFeatures.length+" records","success");
-        clearAll();
+      if(failed.length === 0){
+        showMessage("Added " + addFeatures.length + " records","success");
+
+        // Clear selection and form immediately
+        if(highlightHandle) highlightHandle.remove();
+        highlightHandle = null;
+        selectedObjectIds = [];
+        selectedGlobalIDs = [];
+        document.getElementById("relatedForm").reset();
+        submitBtn.disabled = true;
+        updateCount();
+
       } else {
         showMessage("Some records failed. Check console.","error");
-        submitBtn.disabled=false;
+        submitBtn.disabled = false;
       }
 
     } catch(err){
       showMessage("Error adding records: "+err.message,"error");
-      submitBtn.disabled=false;
+      submitBtn.disabled = false;
     }
   };
-
 });
 </script>
 </body>

@@ -94,9 +94,7 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
 <div id="sidePanel">
   <h3>Add Cat Trapping Records</h3>
 
-  <!-- Message box -->
   <div id="message"></div>
-
   <div id="count">0 traps selected</div>
 
   <form id="relatedForm">
@@ -152,31 +150,16 @@ require([
 
   function updateCount(){
     countDiv.innerText = selectedObjectIds.length + " traps selected";
-    countDiv.style.color = "#0079c1";
-    countDiv.style.fontWeight = "600";
     submitBtn.disabled = selectedObjectIds.length === 0;
   }
 
   function showMessage(message, type="info", duration=2000){
     messageDiv.innerText = message;
     messageDiv.style.display = "block";
-
-    if(type === "success"){
-      messageDiv.style.background="#e6f4ea";
-      messageDiv.style.color="#1b5e20";
-      messageDiv.style.border="1px solid #a5d6a7";
-    } else if(type === "error"){
-      messageDiv.style.background="#fdecea";
-      messageDiv.style.color="#b71c1c";
-      messageDiv.style.border="1px solid #f5c6cb";
-    } else {
-      messageDiv.style.background="#e3f2fd";
-      messageDiv.style.color="#0d47a1";
-      messageDiv.style.border="1px solid #90caf9";
-    }
-
-    // Auto-hide after duration
-    setTimeout(()=>{ messageDiv.style.display = "none"; }, duration);
+    messageDiv.style.background =
+      type==="success" ? "#e6f4ea" :
+      type==="error" ? "#fdecea" : "#e3f2fd";
+    setTimeout(()=> messageDiv.style.display="none", duration);
   }
 
   view.when(async () => {
@@ -188,17 +171,45 @@ require([
 
     layerView = await view.whenLayerView(trapsLayer);
 
+    /* ---------------- FILTER BUTTON ---------------- */
+    let filterOn = false;
+
+    const filterBtn = document.createElement("button");
+    filterBtn.innerText = "Filter: InUse + Triggered";
+    filterBtn.className = "mapButton";
+
+    filterBtn.onclick = () => {
+      filterOn = !filterOn;
+
+      if (filterOn) {
+        layerView.filter = {
+          where: "Status = 'InUse' AND Node_StatusID = 'Triggered'"
+        };
+        filterBtn.innerText = "Clear Filter";
+        filterBtn.style.background = "#d32f2f";
+      } else {
+        layerView.filter = null;
+        filterBtn.innerText = "Filter: InUse + Triggered";
+        filterBtn.style.background = "#0079c1";
+      }
+
+      if (highlightHandle) highlightHandle.remove();
+      highlightHandle = null;
+      selectedObjectIds = [];
+      selectedGlobalIDs = [];
+      updateCount();
+      sidePanel.style.display = "none";
+    };
+
+    view.ui.add(filterBtn,"top-left");
+    /* ------------------------------------------------ */
+
     const lassoLayer = new GraphicsLayer();
     view.map.add(lassoLayer);
 
     const sketchVM = new SketchViewModel({
       view: view,
-      layer: lassoLayer,
-      polygonSymbol: {
-        type: "simple-fill",
-        color: [0, 0, 255, 0.1],
-        outline: { color: [0,0,255], width:1 }
-      }
+      layer: lassoLayer
     });
 
     const lassoBtn = document.createElement("button");
@@ -225,42 +236,28 @@ require([
     sketchVM.on("create", async event => {
       if(event.state !== "complete") return;
 
-      const polygon = event.graphic.geometry;
       const query = trapsLayer.createQuery();
-      query.geometry = polygon;
+      query.geometry = event.graphic.geometry;
       query.spatialRelationship = "intersects";
-      query.outFields = ["OBJECTID"];
+      query.outFields = ["OBJECTID","GlobalID"];
       query.returnGeometry = false;
 
       const results = await layerView.queryFeatures(query);
 
-      for(const f of results.features){
-        const objectId = f.attributes[trapsLayer.objectIdField];
-
-        const fullQuery = trapsLayer.createQuery();
-        fullQuery.objectIds = [objectId];
-        fullQuery.outFields = ["GlobalID"];
-        fullQuery.returnGeometry = false;
-
-        const fullFeature = (await trapsLayer.queryFeatures(fullQuery)).features[0];
-        if(!fullFeature) continue;
-
-        const globalId = fullFeature.attributes.GlobalID;
-        if(!selectedObjectIds.includes(objectId) && globalId){
-          selectedObjectIds.push(objectId);
-          selectedGlobalIDs.push(globalId);
+      results.features.forEach(f => {
+        const oid = f.attributes[trapsLayer.objectIdField];
+        const gid = f.attributes.GlobalID;
+        if(!selectedObjectIds.includes(oid) && gid){
+          selectedObjectIds.push(oid);
+          selectedGlobalIDs.push(gid);
         }
-      }
+      });
 
       if(highlightHandle) highlightHandle.remove();
       highlightHandle = layerView.highlight(selectedObjectIds);
 
       updateCount();
       sidePanel.style.display = "block";
-
-      const dateInput = document.getElementById("DateChecked");
-      if(!dateInput.value) dateInput.value = new Date().toISOString().slice(0,16);
-
       lassoLayer.removeAll();
     });
   });
@@ -270,21 +267,12 @@ require([
     if(!hit.results.length) return;
 
     const graphic = hit.results[0].graphic;
-    const objectId = graphic.attributes[trapsLayer.objectIdField];
+    const oid = graphic.attributes[trapsLayer.objectIdField];
+    const gid = graphic.attributes.GlobalID;
 
-    const query = trapsLayer.createQuery();
-    query.objectIds = [objectId];
-    query.outFields = ["GlobalID"];
-    query.returnGeometry = false;
-
-    const result = await trapsLayer.queryFeatures(query);
-    if(!result.features.length) return;
-
-    const globalId = result.features[0].attributes.GlobalID;
-
-    if(!selectedObjectIds.includes(objectId) && globalId){
-      selectedObjectIds.push(objectId);
-      selectedGlobalIDs.push(globalId);
+    if(!selectedObjectIds.includes(oid) && gid){
+      selectedObjectIds.push(oid);
+      selectedGlobalIDs.push(gid);
     }
 
     if(highlightHandle) highlightHandle.remove();
@@ -292,9 +280,6 @@ require([
 
     updateCount();
     sidePanel.style.display = "block";
-
-    const dateInput = document.getElementById("DateChecked");
-    if(!dateInput.value) dateInput.value = new Date().toISOString().slice(0,16);
   });
 
   submitBtn.onclick = async () => {
@@ -303,46 +288,22 @@ require([
       return;
     }
 
-    const dateInput = document.getElementById("DateChecked").value;
-    const trapState = document.getElementById("TrapState_1").value;
-    const closingTrap = document.getElementById("ClosingTrap").value;
-
-    if(!dateInput || !trapState || !closingTrap){
-      showMessage("Complete required fields","error");
-      return;
-    }
-
-    submitBtn.disabled = true;
-
-    const addFeatures = selectedGlobalIDs.map(guid => ({
-      attributes: { GUID: guid, DateChecked: dateInput, TrapState_1: trapState, ClosingTrap: closingTrap }
+    const addFeatures = selectedGlobalIDs.map(gid => ({
+      attributes:{
+        GUID: gid,
+        DateChecked: document.getElementById("DateChecked").value,
+        TrapState_1: document.getElementById("TrapState_1").value,
+        ClosingTrap: document.getElementById("ClosingTrap").value
+      }
     }));
 
-    try {
-      const result = await relatedTable.applyEdits({ addFeatures });
-      const failed = result.addFeatureResults.filter(r => r.error != null);
+    const result = await relatedTable.applyEdits({ addFeatures });
+    showMessage("Added "+addFeatures.length+" records","success");
 
-      if(failed.length === 0){
-        showMessage("Added " + addFeatures.length + " records","success");
-
-        // Clear selection and form immediately
-        if(highlightHandle) highlightHandle.remove();
-        highlightHandle = null;
-        selectedObjectIds = [];
-        selectedGlobalIDs = [];
-        document.getElementById("relatedForm").reset();
-        submitBtn.disabled = true;
-        updateCount();
-
-      } else {
-        showMessage("Some records failed. Check console.","error");
-        submitBtn.disabled = false;
-      }
-
-    } catch(err){
-      showMessage("Error adding records: "+err.message,"error");
-      submitBtn.disabled = false;
-    }
+    if(highlightHandle) highlightHandle.remove();
+    selectedObjectIds=[];
+    selectedGlobalIDs=[];
+    updateCount();
   };
 });
 </script>

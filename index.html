@@ -95,71 +95,62 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   <h3>Add Cat Trapping Records</h3>
   <div id="message"></div>
   <div id="count">0 traps selected</div>
-
-  <!-- FORM IS NOW EMPTY (BUILT FROM JSON) -->
   <form id="relatedForm"></form>
-
   <button id="submitBtn" disabled>Add Records</button>
 </div>
 
 <script>
-
-let formConfig = null;
-
-// LOAD JSON CONFIG
-async function loadFormConfig() {
-  const response = await fetch("./formConfig.json");
-  formConfig = await response.json();
-  buildForm(formConfig.fields);
-}
-
-// BUILD FORM FROM JSON
-function buildForm(fields) {
-  const form = document.getElementById("relatedForm");
-  form.innerHTML = "";
-
-  fields.forEach(field => {
-
-    const label = document.createElement("label");
-    label.innerText = field.label;
-    form.appendChild(label);
-
-    let input;
-
-    if (field.type === "select") {
-      input = document.createElement("select");
-
-      const defaultOption = document.createElement("option");
-      defaultOption.value = "";
-      defaultOption.innerText = "--Select--";
-      input.appendChild(defaultOption);
-
-      field.domain.forEach(option => {
-        const opt = document.createElement("option");
-        opt.value = option.value;
-        opt.innerText = option.label;
-        input.appendChild(opt);
-      });
-
-    } else {
-      input = document.createElement("input");
-      input.type = field.type;
-    }
-
-    input.id = field.id;
-    form.appendChild(input);
-  });
-}
-
 require([
   "esri/WebMap",
   "esri/views/MapView",
   "esri/widgets/Sketch/SketchViewModel",
   "esri/layers/GraphicsLayer"
-], async function(WebMap, MapView, SketchViewModel, GraphicsLayer){
+], function(WebMap, MapView, SketchViewModel, GraphicsLayer){
 
-  // LOAD FORM CONFIG FIRST
-  await loadFormConfig();
+  let formConfig = null;
+
+  async function loadFormConfig() {
+    const response = await fetch("./formConfig.json");
+    formConfig = await response.json();
+    buildForm(formConfig.fields);
+  }
+
+  function buildForm(fields) {
+    const form = document.getElementById("relatedForm");
+    form.innerHTML = "";
+
+    fields.forEach(field => {
+
+      const label = document.createElement("label");
+      label.innerText = field.label;
+      form.appendChild(label);
+
+      let input;
+
+      if (field.type === "select") {
+        input = document.createElement("select");
+
+        const defaultOption = document.createElement("option");
+        defaultOption.value = "";
+        defaultOption.innerText = "--Select--";
+        input.appendChild(defaultOption);
+
+        field.domain.forEach(option => {
+          const opt = document.createElement("option");
+          opt.value = option.value;
+          opt.innerText = option.label;
+          input.appendChild(opt);
+        });
+
+      } else {
+        input = document.createElement("input");
+        input.type = field.type;
+      }
+
+      input.id = field.id;
+      form.appendChild(input);
+    });
+  }
 
   const webmap = new WebMap({
     portalItem: { id: "552cdf8d85234994a53339f6fbacfa3b" }
@@ -182,8 +173,6 @@ require([
 
   function updateCount(){
     countDiv.innerText = selectedObjectIds.length + " traps selected";
-    countDiv.style.color = "#0079c1";
-    countDiv.style.fontWeight = "600";
     submitBtn.disabled = selectedObjectIds.length === 0;
   }
 
@@ -194,15 +183,12 @@ require([
     if(type === "success"){
       messageDiv.style.background="#e6f4ea";
       messageDiv.style.color="#1b5e20";
-      messageDiv.style.border="1px solid #a5d6a7";
     } else if(type === "error"){
       messageDiv.style.background="#fdecea";
       messageDiv.style.color="#b71c1c";
-      messageDiv.style.border="1px solid #f5c6cb";
     } else {
       messageDiv.style.background="#e3f2fd";
       messageDiv.style.color="#0d47a1";
-      messageDiv.style.border="1px solid #90caf9";
     }
 
     setTimeout(()=>{ messageDiv.style.display = "none"; }, duration);
@@ -210,45 +196,14 @@ require([
 
   view.when(async () => {
 
+    // 🔥 JSON LOAD MOVED HERE (Fixes GitHub Pages timing)
+    await loadFormConfig();
+
     trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === "Cat Traps");
     relatedTable = webmap.tables.find(t => t.title === "Cat Trapping Data");
     trapsLayer.popupEnabled = false;
     view.popup.autoOpenEnabled = false;
     layerView = await view.whenLayerView(trapsLayer);
-
-    const lassoLayer = new GraphicsLayer();
-    view.map.add(lassoLayer);
-
-    const sketchVM = new SketchViewModel({
-      view: view,
-      layer: lassoLayer,
-      polygonSymbol: {
-        type: "simple-fill",
-        color: [0, 0, 255, 0.1],
-        outline: { color: [0,0,255], width:1 }
-      }
-    });
-
-    const lassoBtn = document.createElement("button");
-    lassoBtn.innerText="Lasso Select";
-    lassoBtn.className="mapButton";
-    lassoBtn.onclick = () => sketchVM.create("polygon");
-
-    const clearBtn = document.createElement("button");
-    clearBtn.innerText="Clear Selection";
-    clearBtn.className="mapButton";
-    clearBtn.onclick = () => {
-      if(highlightHandle) highlightHandle.remove();
-      highlightHandle = null;
-      selectedObjectIds = [];
-      selectedGlobalIDs = [];
-      document.getElementById("relatedForm").reset();
-      updateCount();
-      sidePanel.style.display = "none";
-    };
-
-    view.ui.add(lassoBtn,"top-left");
-    view.ui.add(clearBtn,"top-left");
 
   });
 
@@ -324,15 +279,13 @@ require([
 
       if(failed.length === 0){
         showMessage("Added " + addFeatures.length + " records","success");
-        if(highlightHandle) highlightHandle.remove();
-        highlightHandle = null;
         selectedObjectIds = [];
         selectedGlobalIDs = [];
         document.getElementById("relatedForm").reset();
         submitBtn.disabled = true;
         updateCount();
       } else {
-        showMessage("Some records failed. Check console.","error");
+        showMessage("Some records failed.","error");
         submitBtn.disabled = false;
       }
     } catch(err){

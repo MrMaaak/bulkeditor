@@ -1,4 +1,11 @@
 {
+  "map": {
+    "portalItemId": "552cdf8d85234994a53339f6fbacfa3b"
+  },
+  "layers": {
+    "trapsLayer": "Cat Traps",
+    "relatedTable": "Cat Trapping Data"
+  },
   "fields": [
     {
       "id": "DateChecked",
@@ -12,10 +19,10 @@
       "type": "select",
       "required": true,
       "domain": [
-        { "value": "Set", "label": "Set" },
-        { "value": "SprungCaught", "label": "SprungCaught" },
-        { "value": "SprungEmpty", "label": "SprungEmpty" },
-        { "value": "Closed", "label": "Closed" }
+        {"value": "Set", "label": "Set"},
+        {"value": "SprungCaught", "label": "SprungCaught"},
+        {"value": "SprungEmpty", "label": "SprungEmpty"},
+        {"value": "Closed", "label": "Closed"}
       ]
     },
     {
@@ -24,9 +31,21 @@
       "type": "select",
       "required": true,
       "domain": [
-        { "value": "Yes", "label": "Yes" },
-        { "value": "No", "label": "No" }
+        {"value": "Yes", "label": "Yes"},
+        {"value": "No", "label": "No"}
       ]
+    }
+  ],
+  "filters": [
+    {
+      "value": "",
+      "label": "All",
+      "definition": "Status IN ('InUse','Missing','Planned','Broken','Closed')"
+    },
+    {
+      "value": "InUse_Triggered",
+      "label": "Triggered Traps",
+      "definition": "Status = 'InUse' AND Node_StatusID = 'Triggered'"
     }
   ]
 }

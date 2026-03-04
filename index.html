@@ -108,7 +108,7 @@ let formConfig = null;
 
 // LOAD JSON CONFIG
 async function loadFormConfig() {
-  const response = await fetch("formConfig.json");
+  const response = await fetch("./formConfig.json");
   formConfig = await response.json();
   buildForm(formConfig.fields);
 }

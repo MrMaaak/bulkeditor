@@ -25,26 +25,11 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   border-left:1px solid #ddd;
 }
 
-#message{ 
-  display:none;
-  margin-bottom:10px;
-  padding:8px 10px;
-  border-radius:4px;
-  font-size:14px;
-}
+#message{ display:none; margin-bottom:10px; padding:8px 10px; border-radius:4px; font-size:14px; }
 
-#count{
-  margin:15px 0;
-  font-weight:600;
-  color:#0079c1;
-}
+#count{ margin:15px 0; font-weight:600; color:#0079c1; }
 
-#relatedForm label{
-  display:block;
-  margin-top:15px;
-  margin-bottom:5px;
-  font-weight:600;
-}
+#relatedForm label{ display:block; margin-top:15px; margin-bottom:5px; font-weight:600; }
 
 #relatedForm input, #relatedForm select{
   width:100%;
@@ -67,10 +52,7 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   font-size:16px;
 }
 
-#submitBtn:disabled{
-  background:#9e9e9e;
-  cursor:not-allowed;
-}
+#submitBtn:disabled{ background:#9e9e9e; cursor:not-allowed; }
 
 .mapButton{
   display:block;
@@ -97,7 +79,6 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   <div id="count">0 traps selected</div>
 
   <form id="relatedForm"></form>
-
   <button id="submitBtn" disabled>Add Records</button>
 </div>
 
@@ -146,12 +127,10 @@ require([
     });
   }
 
-  const webmap=new WebMap({ portalItem:{ id:"552cdf8d85234994a53339f6fbacfa3b" } });
+  await loadFormConfig();
 
-  const view=new MapView({
-    container:"viewDiv",
-    map:webmap
-  });
+  const webmap=new WebMap({ portalItem:{ id: formConfig.map.portalItemId } });
+  const view=new MapView({ container:"viewDiv", map:webmap });
 
   let trapsLayer, relatedTable, layerView;
   let selectedObjectIds = [];
@@ -173,30 +152,16 @@ require([
   function showMessage(message,type="info",duration=2000){
     messageDiv.innerText=message;
     messageDiv.style.display="block";
-
-    if(type==="success"){
-      messageDiv.style.background="#e6f4ea";
-      messageDiv.style.color="#1b5e20";
-      messageDiv.style.border="1px solid #a5d6a7";
-    } else if(type==="error"){
-      messageDiv.style.background="#fdecea";
-      messageDiv.style.color="#b71c1c";
-      messageDiv.style.border="1px solid #f5c6cb";
-    } else {
-      messageDiv.style.background="#e3f2fd";
-      messageDiv.style.color="#0d47a1";
-      messageDiv.style.border="1px solid #90caf9";
-    }
-
-    setTimeout(()=>{ messageDiv.style.display="none"; }, duration);
+    if(type==="success"){ messageDiv.style.background="#e6f4ea"; messageDiv.style.color="#1b5e20"; messageDiv.style.border="1px solid #a5d6a7"; }
+    else if(type==="error"){ messageDiv.style.background="#fdecea"; messageDiv.style.color="#b71c1c"; messageDiv.style.border="1px solid #f5c6cb"; }
+    else{ messageDiv.style.background="#e3f2fd"; messageDiv.style.color="#0d47a1"; messageDiv.style.border="1px solid #90caf9"; }
+    setTimeout(()=>{ messageDiv.style.display = "none"; }, duration);
   }
 
   view.when(async () => {
 
-    await loadFormConfig();
-
-    trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === "Cat Traps");
-    relatedTable = webmap.tables.find(t => t.title === "Cat Trapping Data");
+    trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === formConfig.layers.trapsLayer);
+    relatedTable = webmap.tables.find(t => t.title === formConfig.layers.relatedTable);
     trapsLayer.popupEnabled = false;
     view.popup.autoOpenEnabled = false;
     layerView = await view.whenLayerView(trapsLayer);
@@ -210,6 +175,7 @@ require([
       polygonSymbol:{ type:"simple-fill", color:[0,0,255,0.1], outline:{ color:[0,0,255], width:1 } }
     });
 
+    // LASSO + CLEAR BUTTONS
     const lassoBtn = document.createElement("button");
     lassoBtn.innerText="Lasso Select";
     lassoBtn.className="mapButton";
@@ -233,16 +199,11 @@ require([
 
     // FILTER DROPDOWN
     const filterWrapper=document.createElement("div");
-    filterWrapper.style.display="flex";
-    filterWrapper.style.flexDirection="column";
-    filterWrapper.style.marginTop="5px";
+    filterWrapper.style.display="flex"; filterWrapper.style.flexDirection="column"; filterWrapper.style.marginTop="5px";
 
     const filterContainer=document.createElement("div");
-    filterContainer.style.background="#0079c1";
-    filterContainer.style.padding="8px 10px";
-    filterContainer.style.borderRadius="4px";
-    filterContainer.style.fontSize="14px";
-    filterContainer.style.color="#fff";
+    filterContainer.style.background="#0079c1"; filterContainer.style.padding="8px 10px"; filterContainer.style.borderRadius="4px";
+    filterContainer.style.fontSize="14px"; filterContainer.style.color="#fff";
 
     const filterLabel=document.createElement("label");
     filterLabel.innerText="Filter Traps:";
@@ -260,11 +221,13 @@ require([
     filterDropdown.style.color="#0079c1";
     filterDropdown.style.cursor="pointer";
 
-    const optionAll=document.createElement("option");
-    optionAll.value=""; optionAll.innerText="All"; filterDropdown.appendChild(optionAll);
-
-    const optionTriggered=document.createElement("option");
-    optionTriggered.value="InUse_Triggered"; optionTriggered.innerText="Triggered Traps"; filterDropdown.appendChild(optionTriggered);
+    // ADD FILTERS FROM JSON
+    formConfig.filters.forEach(f=>{
+      const opt = document.createElement("option");
+      opt.value = f.value;
+      opt.innerText = f.label;
+      filterDropdown.appendChild(opt);
+    });
 
     filterContainer.appendChild(filterLabel);
     filterContainer.appendChild(filterDropdown);
@@ -273,9 +236,8 @@ require([
     view.ui.add(filterWrapper,"top-left");
 
     filterDropdown.addEventListener("change",()=>{
-      const val=filterDropdown.value;
-      if(val==="InUse_Triggered") trapsLayer.definitionExpression="Status = 'InUse' AND Node_StatusID = 'Triggered'";
-      else trapsLayer.definitionExpression="Status IN ('InUse','Missing','Planned','Broken','Closed')";
+      const selected = formConfig.filters.find(f=>f.value===filterDropdown.value);
+      trapsLayer.definitionExpression = selected ? selected.definition : "";
       if(highlightHandle) highlightHandle.remove();
       highlightHandle=null;
       selectedObjectIds=[]; selectedGlobalIDs=[];

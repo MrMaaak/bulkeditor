@@ -118,35 +118,28 @@ require([
   function buildForm(fields) {
     const form = document.getElementById("relatedForm");
     form.innerHTML = "";
-
     fields.forEach(field => {
-
       const label = document.createElement("label");
       label.innerText = field.label;
       form.appendChild(label);
 
       let input;
-
-      if (field.type === "select") {
+      if(field.type === "select"){
         input = document.createElement("select");
-
         const defaultOption = document.createElement("option");
         defaultOption.value = "";
         defaultOption.innerText = "--Select--";
         input.appendChild(defaultOption);
-
-        field.domain.forEach(option => {
-          const opt = document.createElement("option");
-          opt.value = option.value;
-          opt.innerText = option.label;
-          input.appendChild(opt);
+        field.domain.forEach(opt => {
+          const o = document.createElement("option");
+          o.value = opt.value;
+          o.innerText = opt.label;
+          input.appendChild(o);
         });
-
       } else {
         input = document.createElement("input");
         input.type = field.type;
       }
-
       input.id = field.id;
       form.appendChild(input);
     });
@@ -173,30 +166,33 @@ require([
 
   function updateCount(){
     countDiv.innerText = selectedObjectIds.length + " traps selected";
+    countDiv.style.color = "#0079c1";
+    countDiv.style.fontWeight = "600";
     submitBtn.disabled = selectedObjectIds.length === 0;
   }
 
   function showMessage(message, type="info", duration=2000){
     messageDiv.innerText = message;
     messageDiv.style.display = "block";
-
     if(type === "success"){
       messageDiv.style.background="#e6f4ea";
       messageDiv.style.color="#1b5e20";
+      messageDiv.style.border="1px solid #a5d6a7";
     } else if(type === "error"){
       messageDiv.style.background="#fdecea";
       messageDiv.style.color="#b71c1c";
+      messageDiv.style.border="1px solid #f5c6cb";
     } else {
       messageDiv.style.background="#e3f2fd";
       messageDiv.style.color="#0d47a1";
+      messageDiv.style.border="1px solid #90caf9";
     }
-
-    setTimeout(()=>{ messageDiv.style.display = "none"; }, duration);
+    setTimeout(()=>{ messageDiv.style.display="none"; }, duration);
   }
 
   view.when(async () => {
 
-    // 🔥 JSON LOAD MOVED HERE (Fixes GitHub Pages timing)
+    // LOAD FORM JSON
     await loadFormConfig();
 
     trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === "Cat Traps");
@@ -205,92 +201,217 @@ require([
     view.popup.autoOpenEnabled = false;
     layerView = await view.whenLayerView(trapsLayer);
 
+    // Lasso GraphicsLayer
+    const lassoLayer = new GraphicsLayer();
+    view.map.add(lassoLayer);
+
+    const sketchVM = new SketchViewModel({
+      view: view,
+      layer: lassoLayer,
+      polygonSymbol: {
+        type: "simple-fill",
+        color: [0,0,255,0.1],
+        outline: { color: [0,0,255], width:1 }
+      }
+    });
+
+    // LASSO & CLEAR BUTTONS
+    const lassoBtn = document.createElement("button");
+    lassoBtn.innerText="Lasso Select";
+    lassoBtn.className="mapButton";
+    lassoBtn.onclick = () => sketchVM.create("polygon");
+
+    const clearBtn = document.createElement("button");
+    clearBtn.innerText="Clear Selection";
+    clearBtn.className="mapButton";
+    clearBtn.onclick = () => {
+      if(highlightHandle) highlightHandle.remove();
+      highlightHandle = null;
+      selectedObjectIds = [];
+      selectedGlobalIDs = [];
+      document.getElementById("relatedForm").reset();
+      updateCount();
+      sidePanel.style.display = "none";
+    };
+
+    view.ui.add(lassoBtn,"top-left");
+    view.ui.add(clearBtn,"top-left");
+
+    // FILTER DROPDOWN
+    const filterWrapper = document.createElement("div");
+    filterWrapper.style.display="flex";
+    filterWrapper.style.flexDirection="column";
+    filterWrapper.style.marginTop="5px";
+
+    const filterContainer = document.createElement("div");
+    filterContainer.style.background="#0079c1";
+    filterContainer.style.padding="8px 10px";
+    filterContainer.style.borderRadius="4px";
+    filterContainer.style.fontSize="14px";
+    filterContainer.style.color="#fff";
+
+    const filterLabel = document.createElement("label");
+    filterLabel.innerText="Filter Traps:";
+    filterLabel.style.color="#fff";
+    filterLabel.style.fontWeight="600";
+    filterLabel.style.marginBottom="5px";
+
+    const filterDropdown = document.createElement("select");
+    filterDropdown.id="filterTraps";
+    filterDropdown.style.width="100%";
+    filterDropdown.style.padding="8px 10px";
+    filterDropdown.style.border="1px solid #0079c1";
+    filterDropdown.style.borderRadius="4px";
+    filterDropdown.style.backgroundColor="#fff";
+    filterDropdown.style.color="#0079c1";
+    filterDropdown.style.cursor="pointer";
+
+    const optionAll = document.createElement("option");
+    optionAll.value="";
+    optionAll.innerText="All";
+    filterDropdown.appendChild(optionAll);
+
+    const optionTriggered = document.createElement("option");
+    optionTriggered.value="InUse_Triggered";
+    optionTriggered.innerText="Triggered Traps";
+    filterDropdown.appendChild(optionTriggered);
+
+    filterContainer.appendChild(filterLabel);
+    filterContainer.appendChild(filterDropdown);
+    filterWrapper.appendChild(filterContainer);
+    view.ui.add(filterWrapper,"top-left");
+
+    filterDropdown.addEventListener("change", () => {
+      const val = filterDropdown.value;
+      if(val==="InUse_Triggered"){
+        trapsLayer.definitionExpression="Status = 'InUse' AND Node_StatusID = 'Triggered'";
+      } else {
+        trapsLayer.definitionExpression="Status IN ('InUse','Missing','Planned','Broken','Closed')";
+      }
+      if(highlightHandle) highlightHandle.remove();
+      highlightHandle=null;
+      selectedObjectIds=[];
+      selectedGlobalIDs=[];
+      document.getElementById("relatedForm").reset();
+      updateCount();
+      sidePanel.style.display="none";
+    });
+
+    // LASSO SELECTION
+    sketchVM.on("create", async event => {
+      if(event.state !== "complete") return;
+      const polygon = event.graphic.geometry;
+      const query = trapsLayer.createQuery();
+      query.geometry = polygon;
+      query.spatialRelationship="intersects";
+      query.outFields=["OBJECTID"];
+      query.returnGeometry=false;
+
+      const results = await layerView.queryFeatures(query);
+      for(const f of results.features){
+        const objectId = f.attributes[trapsLayer.objectIdField];
+        const fullQuery = trapsLayer.createQuery();
+        fullQuery.objectIds=[objectId];
+        fullQuery.outFields=["GlobalID"];
+        fullQuery.returnGeometry=false;
+        const fullFeature=(await trapsLayer.queryFeatures(fullQuery)).features[0];
+        if(!fullFeature) continue;
+        const globalId=fullFeature.attributes.GlobalID;
+        if(!selectedObjectIds.includes(objectId) && globalId){
+          selectedObjectIds.push(objectId);
+          selectedGlobalIDs.push(globalId);
+        }
+      }
+      if(highlightHandle) highlightHandle.remove();
+      highlightHandle=layerView.highlight(selectedObjectIds);
+      updateCount();
+      sidePanel.style.display="block";
+      const dateField=formConfig.fields.find(f=>f.type==="datetime-local");
+      if(dateField){
+        const dateInput=document.getElementById(dateField.id);
+        if(dateInput && !dateInput.value)
+          dateInput.value=new Date().toISOString().slice(0,16);
+      }
+      lassoLayer.removeAll();
+    });
+
   });
 
+  // POINT CLICK SELECTION
   view.on("click", async event => {
-    const hit = await view.hitTest(event, { include: [trapsLayer] });
+    const hit = await view.hitTest(event,{ include: [trapsLayer] });
     if(!hit.results.length) return;
-
     const graphic = hit.results[0].graphic;
     const objectId = graphic.attributes[trapsLayer.objectIdField];
 
     const query = trapsLayer.createQuery();
-    query.objectIds = [objectId];
-    query.outFields = ["GlobalID"];
-    query.returnGeometry = false;
+    query.objectIds=[objectId];
+    query.outFields=["GlobalID"];
+    query.returnGeometry=false;
 
     const result = await trapsLayer.queryFeatures(query);
     if(!result.features.length) return;
-
-    const globalId = result.features[0].attributes.GlobalID;
+    const globalId=result.features[0].attributes.GlobalID;
 
     if(!selectedObjectIds.includes(objectId) && globalId){
       selectedObjectIds.push(objectId);
       selectedGlobalIDs.push(globalId);
     }
-
     if(highlightHandle) highlightHandle.remove();
-    highlightHandle = layerView.highlight(selectedObjectIds);
-
+    highlightHandle=layerView.highlight(selectedObjectIds);
     updateCount();
-    sidePanel.style.display = "block";
+    sidePanel.style.display="block";
 
-    const dateField = formConfig.fields.find(f => f.type === "datetime-local");
+    const dateField=formConfig.fields.find(f=>f.type==="datetime-local");
     if(dateField){
-      const dateInput = document.getElementById(dateField.id);
+      const dateInput=document.getElementById(dateField.id);
       if(dateInput && !dateInput.value)
-        dateInput.value = new Date().toISOString().slice(0,16);
+        dateInput.value=new Date().toISOString().slice(0,16);
     }
   });
 
-  submitBtn.onclick = async () => {
-
+  // SUBMIT LOGIC
+  submitBtn.onclick = async ()=>{
     if(!selectedGlobalIDs.length){
       showMessage("Select at least one trap","error");
       return;
     }
+    submitBtn.disabled=true;
 
-    submitBtn.disabled = true;
-
-    const attributes = {};
-
-    for (const field of formConfig.fields) {
-      const value = document.getElementById(field.id).value;
-
-      if (field.required && !value) {
+    const attributes={};
+    for(const field of formConfig.fields){
+      const value=document.getElementById(field.id).value;
+      if(field.required && !value){
         showMessage("Complete required fields","error");
-        submitBtn.disabled = false;
+        submitBtn.disabled=false;
         return;
       }
-
-      attributes[field.id] = value;
+      attributes[field.id]=value;
     }
 
-    const addFeatures = selectedGlobalIDs.map(guid => ({
-      attributes: {
-        GUID: guid,
-        ...attributes
-      }
+    const addFeatures=selectedGlobalIDs.map(guid=>({
+      attributes:{ GUID: guid, ...attributes }
     }));
 
-    try {
-      const result = await relatedTable.applyEdits({ addFeatures });
-      const failed = result.addFeatureResults.filter(r => r.error != null);
-
-      if(failed.length === 0){
-        showMessage("Added " + addFeatures.length + " records","success");
-        selectedObjectIds = [];
-        selectedGlobalIDs = [];
+    try{
+      const result=await relatedTable.applyEdits({ addFeatures });
+      const failed=result.addFeatureResults.filter(r=>r.error!=null);
+      if(failed.length===0){
+        showMessage("Added "+addFeatures.length+" records","success");
+        if(highlightHandle) highlightHandle.remove();
+        highlightHandle=null;
+        selectedObjectIds=[];
+        selectedGlobalIDs=[];
         document.getElementById("relatedForm").reset();
-        submitBtn.disabled = true;
+        submitBtn.disabled=true;
         updateCount();
-      } else {
-        showMessage("Some records failed.","error");
-        submitBtn.disabled = false;
+      }else{
+        showMessage("Some records failed. Check console.","error");
+        submitBtn.disabled=false;
       }
-    } catch(err){
+    }catch(err){
       showMessage("Error adding records: "+err.message,"error");
-      submitBtn.disabled = false;
+      submitBtn.disabled=false;
     }
   };
 

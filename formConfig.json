@@ -1,0 +1,32 @@
+{
+  "fields": [
+    {
+      "id": "DateChecked",
+      "label": "Date Checked",
+      "type": "datetime-local",
+      "required": true
+    },
+    {
+      "id": "TrapState_1",
+      "label": "Trap State",
+      "type": "select",
+      "required": true,
+      "domain": [
+        { "value": "Set", "label": "Set" },
+        { "value": "SprungCaught", "label": "SprungCaught" },
+        { "value": "SprungEmpty", "label": "SprungEmpty" },
+        { "value": "Closed", "label": "Closed" }
+      ]
+    },
+    {
+      "id": "ClosingTrap",
+      "label": "Leave trap closed?",
+      "type": "select",
+      "required": true,
+      "domain": [
+        { "value": "Yes", "label": "Yes" },
+        { "value": "No", "label": "No" }
+      ]
+    }
+  ]
+}

@@ -95,7 +95,9 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   <h3>Add Cat Trapping Records</h3>
   <div id="message"></div>
   <div id="count">0 traps selected</div>
+
   <form id="relatedForm"></form>
+
   <button id="submitBtn" disabled>Add Records</button>
 </div>
 
@@ -115,43 +117,40 @@ require([
     buildForm(formConfig.fields);
   }
 
-  function buildForm(fields) {
-    const form = document.getElementById("relatedForm");
-    form.innerHTML = "";
-    fields.forEach(field => {
-      const label = document.createElement("label");
-      label.innerText = field.label;
+  function buildForm(fields){
+    const form=document.getElementById("relatedForm");
+    form.innerHTML="";
+    fields.forEach(field=>{
+      const label=document.createElement("label");
+      label.innerText=field.label;
       form.appendChild(label);
-
       let input;
-      if(field.type === "select"){
-        input = document.createElement("select");
-        const defaultOption = document.createElement("option");
-        defaultOption.value = "";
-        defaultOption.innerText = "--Select--";
+      if(field.type==="select"){
+        input=document.createElement("select");
+        const defaultOption=document.createElement("option");
+        defaultOption.value="";
+        defaultOption.innerText="--Select--";
         input.appendChild(defaultOption);
-        field.domain.forEach(opt => {
-          const o = document.createElement("option");
-          o.value = opt.value;
-          o.innerText = opt.label;
+        field.domain.forEach(opt=>{
+          const o=document.createElement("option");
+          o.value=opt.value;
+          o.innerText=opt.label;
           input.appendChild(o);
         });
       } else {
-        input = document.createElement("input");
-        input.type = field.type;
+        input=document.createElement("input");
+        input.type=field.type;
       }
-      input.id = field.id;
+      input.id=field.id;
       form.appendChild(input);
     });
   }
 
-  const webmap = new WebMap({
-    portalItem: { id: "552cdf8d85234994a53339f6fbacfa3b" }
-  });
+  const webmap=new WebMap({ portalItem:{ id:"552cdf8d85234994a53339f6fbacfa3b" } });
 
-  const view = new MapView({
-    container: "viewDiv",
-    map: webmap
+  const view=new MapView({
+    container:"viewDiv",
+    map:webmap
   });
 
   let trapsLayer, relatedTable, layerView;
@@ -171,14 +170,15 @@ require([
     submitBtn.disabled = selectedObjectIds.length === 0;
   }
 
-  function showMessage(message, type="info", duration=2000){
-    messageDiv.innerText = message;
-    messageDiv.style.display = "block";
-    if(type === "success"){
+  function showMessage(message,type="info",duration=2000){
+    messageDiv.innerText=message;
+    messageDiv.style.display="block";
+
+    if(type==="success"){
       messageDiv.style.background="#e6f4ea";
       messageDiv.style.color="#1b5e20";
       messageDiv.style.border="1px solid #a5d6a7";
-    } else if(type === "error"){
+    } else if(type==="error"){
       messageDiv.style.background="#fdecea";
       messageDiv.style.color="#b71c1c";
       messageDiv.style.border="1px solid #f5c6cb";
@@ -187,12 +187,12 @@ require([
       messageDiv.style.color="#0d47a1";
       messageDiv.style.border="1px solid #90caf9";
     }
+
     setTimeout(()=>{ messageDiv.style.display="none"; }, duration);
   }
 
   view.when(async () => {
 
-    // LOAD FORM JSON
     await loadFormConfig();
 
     trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === "Cat Traps");
@@ -201,21 +201,15 @@ require([
     view.popup.autoOpenEnabled = false;
     layerView = await view.whenLayerView(trapsLayer);
 
-    // Lasso GraphicsLayer
     const lassoLayer = new GraphicsLayer();
     view.map.add(lassoLayer);
 
     const sketchVM = new SketchViewModel({
-      view: view,
-      layer: lassoLayer,
-      polygonSymbol: {
-        type: "simple-fill",
-        color: [0,0,255,0.1],
-        outline: { color: [0,0,255], width:1 }
-      }
+      view:view,
+      layer:lassoLayer,
+      polygonSymbol:{ type:"simple-fill", color:[0,0,255,0.1], outline:{ color:[0,0,255], width:1 } }
     });
 
-    // LASSO & CLEAR BUTTONS
     const lassoBtn = document.createElement("button");
     lassoBtn.innerText="Lasso Select";
     lassoBtn.className="mapButton";
@@ -226,37 +220,37 @@ require([
     clearBtn.className="mapButton";
     clearBtn.onclick = () => {
       if(highlightHandle) highlightHandle.remove();
-      highlightHandle = null;
-      selectedObjectIds = [];
-      selectedGlobalIDs = [];
+      highlightHandle=null;
+      selectedObjectIds=[];
+      selectedGlobalIDs=[];
       document.getElementById("relatedForm").reset();
       updateCount();
-      sidePanel.style.display = "none";
+      sidePanel.style.display="none";
     };
 
     view.ui.add(lassoBtn,"top-left");
     view.ui.add(clearBtn,"top-left");
 
     // FILTER DROPDOWN
-    const filterWrapper = document.createElement("div");
+    const filterWrapper=document.createElement("div");
     filterWrapper.style.display="flex";
     filterWrapper.style.flexDirection="column";
     filterWrapper.style.marginTop="5px";
 
-    const filterContainer = document.createElement("div");
+    const filterContainer=document.createElement("div");
     filterContainer.style.background="#0079c1";
     filterContainer.style.padding="8px 10px";
     filterContainer.style.borderRadius="4px";
     filterContainer.style.fontSize="14px";
     filterContainer.style.color="#fff";
 
-    const filterLabel = document.createElement("label");
+    const filterLabel=document.createElement("label");
     filterLabel.innerText="Filter Traps:";
     filterLabel.style.color="#fff";
     filterLabel.style.fontWeight="600";
     filterLabel.style.marginBottom="5px";
 
-    const filterDropdown = document.createElement("select");
+    const filterDropdown=document.createElement("select");
     filterDropdown.id="filterTraps";
     filterDropdown.style.width="100%";
     filterDropdown.style.padding="8px 10px";
@@ -266,51 +260,45 @@ require([
     filterDropdown.style.color="#0079c1";
     filterDropdown.style.cursor="pointer";
 
-    const optionAll = document.createElement("option");
-    optionAll.value="";
-    optionAll.innerText="All";
-    filterDropdown.appendChild(optionAll);
+    const optionAll=document.createElement("option");
+    optionAll.value=""; optionAll.innerText="All"; filterDropdown.appendChild(optionAll);
 
-    const optionTriggered = document.createElement("option");
-    optionTriggered.value="InUse_Triggered";
-    optionTriggered.innerText="Triggered Traps";
-    filterDropdown.appendChild(optionTriggered);
+    const optionTriggered=document.createElement("option");
+    optionTriggered.value="InUse_Triggered"; optionTriggered.innerText="Triggered Traps"; filterDropdown.appendChild(optionTriggered);
 
     filterContainer.appendChild(filterLabel);
     filterContainer.appendChild(filterDropdown);
     filterWrapper.appendChild(filterContainer);
+
     view.ui.add(filterWrapper,"top-left");
 
-    filterDropdown.addEventListener("change", () => {
-      const val = filterDropdown.value;
-      if(val==="InUse_Triggered"){
-        trapsLayer.definitionExpression="Status = 'InUse' AND Node_StatusID = 'Triggered'";
-      } else {
-        trapsLayer.definitionExpression="Status IN ('InUse','Missing','Planned','Broken','Closed')";
-      }
+    filterDropdown.addEventListener("change",()=>{
+      const val=filterDropdown.value;
+      if(val==="InUse_Triggered") trapsLayer.definitionExpression="Status = 'InUse' AND Node_StatusID = 'Triggered'";
+      else trapsLayer.definitionExpression="Status IN ('InUse','Missing','Planned','Broken','Closed')";
       if(highlightHandle) highlightHandle.remove();
       highlightHandle=null;
-      selectedObjectIds=[];
-      selectedGlobalIDs=[];
+      selectedObjectIds=[]; selectedGlobalIDs=[];
       document.getElementById("relatedForm").reset();
       updateCount();
       sidePanel.style.display="none";
     });
 
     // LASSO SELECTION
-    sketchVM.on("create", async event => {
-      if(event.state !== "complete") return;
-      const polygon = event.graphic.geometry;
-      const query = trapsLayer.createQuery();
-      query.geometry = polygon;
+    sketchVM.on("create", async event=>{
+      if(event.state!=="complete") return;
+      const polygon=event.graphic.geometry;
+      const query=trapsLayer.createQuery();
+      query.geometry=polygon;
       query.spatialRelationship="intersects";
       query.outFields=["OBJECTID"];
       query.returnGeometry=false;
 
-      const results = await layerView.queryFeatures(query);
+      const results=await layerView.queryFeatures(query);
+
       for(const f of results.features){
-        const objectId = f.attributes[trapsLayer.objectIdField];
-        const fullQuery = trapsLayer.createQuery();
+        const objectId=f.attributes[trapsLayer.objectIdField];
+        const fullQuery=trapsLayer.createQuery();
         fullQuery.objectIds=[objectId];
         fullQuery.outFields=["GlobalID"];
         fullQuery.returnGeometry=false;
@@ -322,97 +310,65 @@ require([
           selectedGlobalIDs.push(globalId);
         }
       }
+
       if(highlightHandle) highlightHandle.remove();
       highlightHandle=layerView.highlight(selectedObjectIds);
+
       updateCount();
       sidePanel.style.display="block";
+
       const dateField=formConfig.fields.find(f=>f.type==="datetime-local");
       if(dateField){
         const dateInput=document.getElementById(dateField.id);
-        if(dateInput && !dateInput.value)
-          dateInput.value=new Date().toISOString().slice(0,16);
+        if(dateInput && !dateInput.value) dateInput.value=new Date().toISOString().slice(0,16);
       }
+
       lassoLayer.removeAll();
     });
 
-  });
+  }); // view.when
 
   // POINT CLICK SELECTION
-  view.on("click", async event => {
-    const hit = await view.hitTest(event,{ include: [trapsLayer] });
+  view.on("click", async event=>{
+    const hit=await view.hitTest(event,{ include:[trapsLayer] });
     if(!hit.results.length) return;
-    const graphic = hit.results[0].graphic;
-    const objectId = graphic.attributes[trapsLayer.objectIdField];
-
-    const query = trapsLayer.createQuery();
-    query.objectIds=[objectId];
-    query.outFields=["GlobalID"];
-    query.returnGeometry=false;
-
-    const result = await trapsLayer.queryFeatures(query);
+    const graphic=hit.results[0].graphic;
+    const objectId=graphic.attributes[trapsLayer.objectIdField];
+    const query=trapsLayer.createQuery(); query.objectIds=[objectId]; query.outFields=["GlobalID"]; query.returnGeometry=false;
+    const result=await trapsLayer.queryFeatures(query);
     if(!result.features.length) return;
     const globalId=result.features[0].attributes.GlobalID;
-
-    if(!selectedObjectIds.includes(objectId) && globalId){
-      selectedObjectIds.push(objectId);
-      selectedGlobalIDs.push(globalId);
-    }
-    if(highlightHandle) highlightHandle.remove();
-    highlightHandle=layerView.highlight(selectedObjectIds);
-    updateCount();
-    sidePanel.style.display="block";
-
+    if(!selectedObjectIds.includes(objectId) && globalId){ selectedObjectIds.push(objectId); selectedGlobalIDs.push(globalId);}
+    if(highlightHandle) highlightHandle.remove(); highlightHandle=layerView.highlight(selectedObjectIds);
+    updateCount(); sidePanel.style.display="block";
     const dateField=formConfig.fields.find(f=>f.type==="datetime-local");
-    if(dateField){
-      const dateInput=document.getElementById(dateField.id);
-      if(dateInput && !dateInput.value)
-        dateInput.value=new Date().toISOString().slice(0,16);
-    }
+    if(dateField){ const dateInput=document.getElementById(dateField.id); if(dateInput && !dateInput.value) dateInput.value=new Date().toISOString().slice(0,16);}
   });
 
   // SUBMIT LOGIC
-  submitBtn.onclick = async ()=>{
-    if(!selectedGlobalIDs.length){
-      showMessage("Select at least one trap","error");
-      return;
-    }
+  submitBtn.onclick=async ()=>{
+    if(!selectedGlobalIDs.length){ showMessage("Select at least one trap","error"); return;}
     submitBtn.disabled=true;
 
     const attributes={};
     for(const field of formConfig.fields){
       const value=document.getElementById(field.id).value;
-      if(field.required && !value){
-        showMessage("Complete required fields","error");
-        submitBtn.disabled=false;
-        return;
-      }
+      if(field.required && !value){ showMessage("Complete required fields","error"); submitBtn.disabled=false; return;}
       attributes[field.id]=value;
     }
 
-    const addFeatures=selectedGlobalIDs.map(guid=>({
-      attributes:{ GUID: guid, ...attributes }
-    }));
+    const addFeatures=selectedGlobalIDs.map(guid=>({ attributes:{ GUID:guid, ...attributes } }));
 
     try{
       const result=await relatedTable.applyEdits({ addFeatures });
       const failed=result.addFeatureResults.filter(r=>r.error!=null);
       if(failed.length===0){
         showMessage("Added "+addFeatures.length+" records","success");
-        if(highlightHandle) highlightHandle.remove();
-        highlightHandle=null;
-        selectedObjectIds=[];
-        selectedGlobalIDs=[];
-        document.getElementById("relatedForm").reset();
-        submitBtn.disabled=true;
-        updateCount();
-      }else{
-        showMessage("Some records failed. Check console.","error");
-        submitBtn.disabled=false;
-      }
-    }catch(err){
-      showMessage("Error adding records: "+err.message,"error");
-      submitBtn.disabled=false;
-    }
+        if(highlightHandle) highlightHandle.remove(); highlightHandle=null;
+        selectedObjectIds=[]; selectedGlobalIDs=[];
+        document.getElementById("relatedForm").reset(); submitBtn.disabled=true; updateCount();
+      } else { showMessage("Some records failed. Check console.","error"); submitBtn.disabled=false;}
+    } catch(err){ showMessage("Error adding records: "+err.message,"error"); submitBtn.disabled=false;}
   };
 
 });

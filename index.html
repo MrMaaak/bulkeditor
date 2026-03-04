@@ -96,37 +96,70 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   <div id="message"></div>
   <div id="count">0 traps selected</div>
 
-  <form id="relatedForm">
-    <label>Date Checked</label>
-    <input type="datetime-local" id="DateChecked">
-
-    <label>Trap State</label>
-    <select id="TrapState_1">
-      <option value="">--Select--</option>
-      <option value="Set">Set</option>
-      <option value="SprungCaught">SprungCaught</option>
-      <option value="SprungEmpty">SprungEmpty</option>
-      <option value="Closed">Closed</option>
-    </select>
-
-    <label>Leave trap closed?</label>
-    <select id="ClosingTrap">
-      <option value="">--Select--</option>
-      <option value="Yes">Yes</option>
-      <option value="No">No</option>
-    </select>
-  </form>
+  <!-- FORM IS NOW EMPTY (BUILT FROM JSON) -->
+  <form id="relatedForm"></form>
 
   <button id="submitBtn" disabled>Add Records</button>
 </div>
 
 <script>
+
+let formConfig = null;
+
+// LOAD JSON CONFIG
+async function loadFormConfig() {
+  const response = await fetch("formConfig.json");
+  formConfig = await response.json();
+  buildForm(formConfig.fields);
+}
+
+// BUILD FORM FROM JSON
+function buildForm(fields) {
+  const form = document.getElementById("relatedForm");
+  form.innerHTML = "";
+
+  fields.forEach(field => {
+
+    const label = document.createElement("label");
+    label.innerText = field.label;
+    form.appendChild(label);
+
+    let input;
+
+    if (field.type === "select") {
+      input = document.createElement("select");
+
+      const defaultOption = document.createElement("option");
+      defaultOption.value = "";
+      defaultOption.innerText = "--Select--";
+      input.appendChild(defaultOption);
+
+      field.domain.forEach(option => {
+        const opt = document.createElement("option");
+        opt.value = option.value;
+        opt.innerText = option.label;
+        input.appendChild(opt);
+      });
+
+    } else {
+      input = document.createElement("input");
+      input.type = field.type;
+    }
+
+    input.id = field.id;
+    form.appendChild(input);
+  });
+}
+
 require([
   "esri/WebMap",
   "esri/views/MapView",
   "esri/widgets/Sketch/SketchViewModel",
   "esri/layers/GraphicsLayer"
-], function(WebMap, MapView, SketchViewModel, GraphicsLayer){
+], async function(WebMap, MapView, SketchViewModel, GraphicsLayer){
+
+  // LOAD FORM CONFIG FIRST
+  await loadFormConfig();
 
   const webmap = new WebMap({
     portalItem: { id: "552cdf8d85234994a53339f6fbacfa3b" }
@@ -176,6 +209,7 @@ require([
   }
 
   view.when(async () => {
+
     trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === "Cat Traps");
     relatedTable = webmap.tables.find(t => t.title === "Cat Trapping Data");
     trapsLayer.popupEnabled = false;
@@ -195,7 +229,6 @@ require([
       }
     });
 
-    // DYNAMIC BUTTONS
     const lassoBtn = document.createElement("button");
     lassoBtn.innerText="Lasso Select";
     lassoBtn.className="mapButton";
@@ -214,110 +247,11 @@ require([
       sidePanel.style.display = "none";
     };
 
-    // Add buttons first
     view.ui.add(lassoBtn,"top-left");
     view.ui.add(clearBtn,"top-left");
 
-    // CREATE FILTER BELOW BUTTONS
-    const filterWrapper = document.createElement("div");
-    filterWrapper.style.display = "flex";
-    filterWrapper.style.flexDirection = "column";
-    filterWrapper.style.marginTop = "5px";
-
-    const filterContainer = document.createElement("div");
-    filterContainer.style.background = "#0079c1";
-    filterContainer.style.padding = "8px 10px";
-    filterContainer.style.borderRadius = "4px";
-    filterContainer.style.fontSize = "14px";
-    filterContainer.style.color = "#fff";
-
-    const filterLabel = document.createElement("label");
-    filterLabel.innerText = "Filter Traps:";
-    filterLabel.style.color = "#fff";
-    filterLabel.style.fontWeight = "600";
-    filterLabel.style.marginBottom = "5px";
-
-    const filterDropdown = document.createElement("select");
-    filterDropdown.id = "filterTraps";
-    filterDropdown.style.width = "100%";
-    filterDropdown.style.padding = "8px 10px";
-    filterDropdown.style.border = "1px solid #0079c1";
-    filterDropdown.style.borderRadius = "4px";
-    filterDropdown.style.backgroundColor = "#fff";
-    filterDropdown.style.color = "#0079c1";
-    filterDropdown.style.cursor = "pointer";
-
-    const optionAll = document.createElement("option");
-    optionAll.value = "";
-    optionAll.innerText = "All";
-    filterDropdown.appendChild(optionAll);
-
-    const optionTriggered = document.createElement("option");
-    optionTriggered.value = "InUse_Triggered";
-    optionTriggered.innerText = "Triggered Traps";
-    filterDropdown.appendChild(optionTriggered);
-
-    filterContainer.appendChild(filterLabel);
-    filterContainer.appendChild(filterDropdown);
-    filterWrapper.appendChild(filterContainer);
-
-    // Add filter below buttons
-    view.ui.add(filterWrapper,"top-left");
-
-    // FILTER LOGIC
-    filterDropdown.addEventListener("change", () => {
-      const val = filterDropdown.value;
-      if(val === "InUse_Triggered"){
-        trapsLayer.definitionExpression = "Status = 'InUse' AND Node_StatusID = 'Triggered'";
-      } else {
-        trapsLayer.definitionExpression = "Status IN ('InUse','Missing','Planned','Broken','Closed')";
-      }
-      if(highlightHandle) highlightHandle.remove();
-      highlightHandle = null;
-      selectedObjectIds = [];
-      selectedGlobalIDs = [];
-      document.getElementById("relatedForm").reset();
-      updateCount();
-      sidePanel.style.display = "none";
-    });
-
-    // LASSO SELECTION
-    sketchVM.on("create", async event => {
-      if(event.state !== "complete") return;
-
-      const polygon = event.graphic.geometry;
-      const query = trapsLayer.createQuery();
-      query.geometry = polygon;
-      query.spatialRelationship = "intersects";
-      query.outFields = ["OBJECTID"];
-      query.returnGeometry = false;
-
-      const results = await layerView.queryFeatures(query);
-      for(const f of results.features){
-        const objectId = f.attributes[trapsLayer.objectIdField];
-        const fullQuery = trapsLayer.createQuery();
-        fullQuery.objectIds = [objectId];
-        fullQuery.outFields = ["GlobalID"];
-        fullQuery.returnGeometry = false;
-        const fullFeature = (await trapsLayer.queryFeatures(fullQuery)).features[0];
-        if(!fullFeature) continue;
-        const globalId = fullFeature.attributes.GlobalID;
-        if(!selectedObjectIds.includes(objectId) && globalId){
-          selectedObjectIds.push(objectId);
-          selectedGlobalIDs.push(globalId);
-        }
-      }
-      if(highlightHandle) highlightHandle.remove();
-      highlightHandle = layerView.highlight(selectedObjectIds);
-      updateCount();
-      sidePanel.style.display = "block";
-      const dateInput = document.getElementById("DateChecked");
-      if(!dateInput.value) dateInput.value = new Date().toISOString().slice(0,16);
-      lassoLayer.removeAll();
-    });
   });
 
-  // POINT CLICK SELECTION
   view.on("click", async event => {
     const hit = await view.hitTest(event, { include: [trapsLayer] });
     if(!hit.results.length) return;
@@ -346,30 +280,42 @@ require([
     updateCount();
     sidePanel.style.display = "block";
 
-    const dateInput = document.getElementById("DateChecked");
-    if(!dateInput.value) dateInput.value = new Date().toISOString().slice(0,16);
+    const dateField = formConfig.fields.find(f => f.type === "datetime-local");
+    if(dateField){
+      const dateInput = document.getElementById(dateField.id);
+      if(dateInput && !dateInput.value)
+        dateInput.value = new Date().toISOString().slice(0,16);
+    }
   });
 
-  // SUBMIT LOGIC
   submitBtn.onclick = async () => {
+
     if(!selectedGlobalIDs.length){
       showMessage("Select at least one trap","error");
       return;
     }
 
-    const dateInput = document.getElementById("DateChecked").value;
-    const trapState = document.getElementById("TrapState_1").value;
-    const closingTrap = document.getElementById("ClosingTrap").value;
-
-    if(!dateInput || !trapState || !closingTrap){
-      showMessage("Complete required fields","error");
-      return;
-    }
-
     submitBtn.disabled = true;
 
+    const attributes = {};
+
+    for (const field of formConfig.fields) {
+      const value = document.getElementById(field.id).value;
+
+      if (field.required && !value) {
+        showMessage("Complete required fields","error");
+        submitBtn.disabled = false;
+        return;
+      }
+
+      attributes[field.id] = value;
+    }
+
     const addFeatures = selectedGlobalIDs.map(guid => ({
-      attributes: { GUID: guid, DateChecked: dateInput, TrapState_1: trapState, ClosingTrap: closingTrap }
+      attributes: {
+        GUID: guid,
+        ...attributes
+      }
     }));
 
     try {
@@ -394,6 +340,7 @@ require([
       submitBtn.disabled = false;
     }
   };
+
 });
 </script>
 </body>

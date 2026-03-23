@@ -25,10 +25,26 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   border-left:1px solid #ddd;
 }
 
-#message{ display:none; margin-bottom:10px; padding:8px 10px; border-radius:4px; font-size:14px; }
-#count{ margin:15px 0; font-weight:600; color:#0079c1; }
+#message{ 
+  display:none;
+  margin-bottom:10px;
+  padding:8px 10px;
+  border-radius:4px;
+  font-size:14px;
+}
 
-#relatedForm label{ display:block; margin-top:15px; margin-bottom:5px; font-weight:600; }
+#count{
+  margin:15px 0;
+  font-weight:600;
+  color:#0079c1;
+}
+
+#relatedForm label{
+  display:block;
+  margin-top:15px;
+  margin-bottom:5px;
+  font-weight:600;
+}
 
 #relatedForm input, #relatedForm select{
   width:100%;
@@ -51,7 +67,10 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   font-size:16px;
 }
 
-#submitBtn:disabled{ background:#9e9e9e; cursor:not-allowed; }
+#submitBtn:disabled{
+  background:#9e9e9e;
+  cursor:not-allowed;
+}
 
 .mapButton{
   display:block;
@@ -76,7 +95,9 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
   <h3>Add Cat Trapping Records</h3>
   <div id="message"></div>
   <div id="count">0 traps selected</div>
+
   <form id="relatedForm"></form>
+
   <button id="submitBtn" disabled>Add Records</button>
 </div>
 
@@ -86,13 +107,15 @@ require([
   "esri/views/MapView",
   "esri/widgets/Sketch/SketchViewModel",
   "esri/layers/GraphicsLayer"
-], async function(WebMap, MapView, SketchViewModel, GraphicsLayer){
+], function(WebMap, MapView, SketchViewModel, GraphicsLayer){
 
   let formConfig = null;
 
   async function loadFormConfig() {
     const response = await fetch("./formConfig.json");
-    if (!response.ok) throw new Error("Failed to load formConfig.json");
+    if (!response.ok) {
+      throw new Error("Failed to load formConfig.json");
+    }
     formConfig = await response.json();
     buildForm(formConfig.fields);
   }
@@ -100,6 +123,7 @@ require([
   function buildForm(fields){
     const form=document.getElementById("relatedForm");
     form.innerHTML="";
+
     fields.forEach(field=>{
       const label=document.createElement("label");
       label.innerText=field.label;
@@ -108,6 +132,7 @@ require([
       let input;
       if(field.type==="select"){
         input=document.createElement("select");
+
         const defaultOption=document.createElement("option");
         defaultOption.value="";
         defaultOption.innerText="--Select--";
@@ -129,16 +154,14 @@ require([
     });
   }
 
-  try {
-    await loadFormConfig();
-  } catch (err) {
-    console.error(err);
-    alert("Failed to load formConfig.json");
-    return;
-  }
+  const webmap = new WebMap({
+    portalItem: { id: "552cdf8d85234994a53339f6fbacfa3b" }
+  });
 
-  const webmap=new WebMap({ portalItem:{ id: formConfig.map.portalItemId } });
-  const view=new MapView({ container:"viewDiv", map:webmap });
+  const view = new MapView({
+    container: "viewDiv",
+    map: webmap
+  });
 
   let trapsLayer, relatedTable, layerView;
   let selectedObjectIds = [];
@@ -158,18 +181,43 @@ require([
   function showMessage(message,type="info",duration=2000){
     messageDiv.innerText=message;
     messageDiv.style.display="block";
-    setTimeout(()=>{ messageDiv.style.display = "none"; }, duration);
+
+    messageDiv.style.background =
+      type==="success" ? "#e6f4ea" :
+      type==="error" ? "#fdecea" : "#e3f2fd";
+
+    messageDiv.style.color =
+      type==="success" ? "#1b5e20" :
+      type==="error" ? "#b71c1c" : "#0d47a1";
+
+    messageDiv.style.border="1px solid #ccc";
+
+    setTimeout(()=>{ messageDiv.style.display="none"; }, duration);
   }
 
   view.when(async () => {
 
-    trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === formConfig.layers.trapsLayer);
-    relatedTable = webmap.tables.find(t => t.title === formConfig.layers.relatedTable);
+    await loadFormConfig();
+
+    // DEBUG: log available layers/tables
+    console.log("Layers:", webmap.layers.map(l => l.title));
+    console.log("Tables:", webmap.tables.map(t => t.title));
+
+    trapsLayer = webmap.layers.find(l => l.type === "feature" && l.title === "Cat Traps");
+    relatedTable = webmap.tables.find(t => t.title === "Cat Trapping Data");
 
     if(!trapsLayer){
-      alert("Layer not found - check name in config");
+      alert("Traps layer not found. Check layer title.");
       return;
     }
+
+    if(!relatedTable){
+      alert("Related table not found. Check table title.");
+      return;
+    }
+
+    trapsLayer.popupEnabled = false;
+    view.popup.autoOpenEnabled = false;
 
     layerView = await view.whenLayerView(trapsLayer);
 
@@ -177,9 +225,13 @@ require([
     view.map.add(lassoLayer);
 
     const sketchVM = new SketchViewModel({
-      view:view,
-      layer:lassoLayer,
-      polygonSymbol:{ type:"simple-fill", color:[0,0,255,0.1], outline:{ color:[0,0,255], width:1 } }
+      view: view,
+      layer: lassoLayer,
+      polygonSymbol:{
+        type:"simple-fill",
+        color:[0,0,255,0.1],
+        outline:{ color:[0,0,255], width:1 }
+      }
     });
 
     const lassoBtn = document.createElement("button");
@@ -278,13 +330,16 @@ require([
     submitBtn.disabled=true;
 
     const attributes={};
+
     for(const field of formConfig.fields){
       const value=document.getElementById(field.id).value;
+
       if(field.required && !value){
         showMessage("Complete required fields","error");
         submitBtn.disabled=false;
         return;
       }
+
       attributes[field.id]=value;
     }
 
@@ -301,17 +356,20 @@ require([
 
         if(highlightHandle) highlightHandle.remove();
         highlightHandle=null;
+
         selectedObjectIds=[];
         selectedGlobalIDs=[];
         document.getElementById("relatedForm").reset();
+
         submitBtn.disabled=true;
         updateCount();
       } else {
         showMessage("Some records failed","error");
         submitBtn.disabled=false;
       }
+
     } catch(err){
-      showMessage("Error: "+err.message,"error");
+      showMessage("Error adding records: "+err.message,"error");
       submitBtn.disabled=false;
     }
   };

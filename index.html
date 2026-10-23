@@ -321,12 +321,31 @@ require([
     trapsLayer.popupEnabled = false;
     view.popup.autoOpenEnabled = false;
 
-    // Load GlobalID with the features in the browser, so selecting needs no extra server requests.
+    layerView = await view.whenLayerView(trapsLayer);
+
+    // Field names are only known once the layer has loaded.
     const oidField = trapsLayer.objectIdField;
     const gidField = trapsLayer.globalIdField || "GlobalID";
-    trapsLayer.outFields = [oidField, gidField];
 
-    layerView = await view.whenLayerView(trapsLayer);
+    // Looks up GlobalIDs for new traps in one request (per 500), instead of one request per trap.
+    async function addToSelection(objectIds){
+      const ids = objectIds.filter(id => !selected.has(id));
+      const batches = [];
+      for(let i = 0; i < ids.length; i += 500) batches.push(ids.slice(i, i + 500));
+
+      const results = await Promise.all(batches.map(batch =>
+        trapsLayer.queryFeatures({ objectIds: batch, outFields:[oidField, gidField], returnGeometry:false })
+      ));
+
+      for(const { features } of results){
+        for(const f of features){
+          const globalId = f.attributes[gidField];
+          if(globalId) selected.set(f.attributes[oidField], globalId);
+        }
+      }
+
+      refreshSelection();
+    }
 
     const lassoLayer = new GraphicsLayer({ listMode:"hide" });
     view.map.add(lassoLayer);
@@ -364,11 +383,24 @@ require([
     toolbar.append(lassoBtn, clearBtn, hint);
     view.ui.add(toolbar,"top-left");
 
+    const lassoHint = hint.innerText;
+    let hintTimer = null;
+    let lassoFinishedAt = 0;
+
     function setLassoActive(active){
+      clearTimeout(hintTimer);
       lassoBtn.classList.toggle("active", active);
       lassoBtn.innerText = active ? "Cancel Lasso" : "Lasso Select";
+      hint.innerText = lassoHint;
       hint.style.display = active ? "block" : "none";
       view.container.style.cursor = active ? "crosshair" : "";
+    }
+
+    function flashHint(text){
+      clearTimeout(hintTimer);
+      hint.innerText = text;
+      hint.style.display = "block";
+      hintTimer = setTimeout(() => { hint.style.display = "none"; }, 3000);
     }
 
     lassoBtn.onclick = () => {
@@ -397,27 +429,27 @@ require([
       if(event.state!=="complete") return;
 
       setLassoActive(false);
+      lassoFinishedAt = Date.now();
+      const geometry = event.graphic.geometry;
       lassoLayer.removeAll();
 
-      const query=layerView.createQuery();
-      query.geometry=event.graphic.geometry;
-      query.spatialRelationship="intersects";
-      query.outFields=[oidField, gidField];
-      query.returnGeometry=false;
-
-      const { features }=await layerView.queryFeatures(query);
-
-      for(const f of features){
-        const globalId=f.attributes[gidField];
-        if(globalId) selected.set(f.attributes[oidField], globalId);
+      try{
+        const objectIds = await layerView.queryObjectIds({ geometry, spatialRelationship:"intersects" });
+        if(!objectIds.length){
+          flashHint("No traps inside the lasso.");
+          return;
+        }
+        await addToSelection(objectIds);
+      } catch(err){
+        console.error("Lasso selection failed", err);
+        flashHint("Lasso selection failed: " + err.message);
       }
-
-      refreshSelection();
     });
 
     // Click a trap to add it; click a selected trap again to remove it.
     view.on("click", async event=>{
-      if(sketchVM.state === "active") return;
+      // Ignore the click that can fire as the lasso drag is released.
+      if(sketchVM.state === "active" || Date.now() - lassoFinishedAt < 400) return;
 
       const hit=await view.hitTest(event,{ include:[trapsLayer] });
       const graphic=hit.results[0]?.graphic;
@@ -425,18 +457,17 @@ require([
 
       const objectId=graphic.attributes[oidField];
 
-      if(selected.has(objectId)){
-        selected.delete(objectId);
-      } else {
-        let globalId=graphic.attributes[gidField];
-        if(!globalId){
-          const result=await trapsLayer.queryFeatures({ objectIds:[objectId], outFields:[gidField] });
-          globalId=result.features[0]?.attributes[gidField];
+      try{
+        if(selected.has(objectId)){
+          selected.delete(objectId);
+          refreshSelection();
+        } else {
+          await addToSelection([objectId]);
         }
-        if(globalId) selected.set(objectId, globalId);
+      } catch(err){
+        console.error("Selection failed", err);
+        flashHint("Selection failed: " + err.message);
       }
-
-      refreshSelection();
     });
 
   });

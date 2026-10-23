@@ -491,7 +491,13 @@ require([
         return;
       }
 
-      attributes[field.id]=value;
+      // Date inputs have no time zone and ArcGIS would read them as UTC,
+      // so convert using the browser's local (NZ) time.
+      if(value && (field.type==="datetime-local" || field.type==="date")){
+        attributes[field.id]=new Date(field.type==="date" ? value+"T00:00" : value).getTime();
+      } else {
+        attributes[field.id]=value;
+      }
     }
 
     const addFeatures=[...selected.values()].map(guid=>({

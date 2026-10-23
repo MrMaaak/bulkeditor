@@ -85,11 +85,40 @@ html, body, #viewDiv { height:100%; margin:0; padding:0; font-family:"Segoe UI",
 }
 
 .mapButton:hover{ background:#005a8c; }
+
+#signInOverlay{
+  position:absolute;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  gap:12px;
+  background:#f5f5f5;
+  z-index:20;
+  text-align:center;
+  padding:20px;
+}
+
+#signInBtn{
+  padding:10px 20px;
+  background:#0079c1;
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  font-size:15px;
+}
 </style>
 </head>
 
 <body>
 <div id="viewDiv"></div>
+
+<div id="signInOverlay">
+  <div id="signInText">Connect to your ArcGIS account to continue.</div>
+  <button id="signInBtn">Continue with ArcGIS</button>
+</div>
 
 <div id="sidePanel">
   <h3>Add Cat Trapping Records</h3>
@@ -106,8 +135,51 @@ require([
   "esri/WebMap",
   "esri/views/MapView",
   "esri/widgets/Sketch/SketchViewModel",
-  "esri/layers/GraphicsLayer"
-], function(WebMap, MapView, SketchViewModel, GraphicsLayer){
+  "esri/layers/GraphicsLayer",
+  "esri/identity/OAuthInfo",
+  "esri/identity/IdentityManager"
+], async function(WebMap, MapView, SketchViewModel, GraphicsLayer, OAuthInfo, esriId){
+
+  // OAuth app registered in ArcGIS Online (Content > New item > Developer credentials > OAuth credentials).
+  // Its redirect URLs must include this page's oauth-callback.html.
+  const APP_ID = "YOUR_APP_ID";
+  const PORTAL_URL = "https://www.arcgis.com";
+
+  if(APP_ID !== "YOUR_APP_ID"){
+    esriId.registerOAuthInfos([
+      new OAuthInfo({ appId: APP_ID, portalUrl: PORTAL_URL, popup: true })
+    ]);
+  }
+
+  // Reuse the ArcGIS session the user already has (e.g. from Experience Builder).
+  // Only if no session is found do we show a one-click button; the popup it opens
+  // closes itself straight away when the user is already signed in to ArcGIS Online.
+  async function signIn(){
+    const sharingUrl = PORTAL_URL + "/sharing";
+
+    try {
+      return await esriId.checkSignInStatus(sharingUrl);
+    } catch {
+      const overlay = document.getElementById("signInOverlay");
+      const text = document.getElementById("signInText");
+      overlay.style.display = "flex";
+
+      return new Promise(resolve => {
+        document.getElementById("signInBtn").onclick = async () => {
+          try {
+            const credential = await esriId.getCredential(sharingUrl);
+            overlay.style.display = "none";
+            resolve(credential);
+          } catch(err) {
+            text.innerText = "Sign in failed or was cancelled. Please try again.";
+          }
+        };
+      });
+    }
+  }
+
+  // Until a real App ID is filled in, fall back to the standard ArcGIS sign-in prompt.
+  if(APP_ID !== "YOUR_APP_ID") await signIn();
 
   let formConfig = null;
 

@@ -138,7 +138,9 @@ require([
   "esri/layers/GraphicsLayer",
   "esri/identity/OAuthInfo",
   "esri/identity/IdentityManager"
-], async function(WebMap, MapView, SketchViewModel, GraphicsLayer, OAuthInfo, esriId){
+], function(WebMap, MapView, SketchViewModel, GraphicsLayer, OAuthInfo, esriId){
+// The ArcGIS loader skips async callbacks, so the async work lives in this wrapper.
+(async () => {
 
   // OAuth app registered in ArcGIS Online (Content > New item > Developer credentials > OAuth credentials).
   // Its redirect URLs must include this page's oauth-callback.html.
@@ -446,6 +448,7 @@ require([
     }
   };
 
+})();
 });
 </script>
 

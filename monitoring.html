@@ -314,7 +314,7 @@ require([
     submitBtn.disabled = selected.size === 0;
     submitBtn.innerText = selected.size ? `Add ${selected.size} record${selected.size === 1 ? "" : "s"}` : "Add records";
     // Like the form's "pull device type from parent": suggest the type when all selected devices share one.
-    if(!deviceTypeTouched){
+    if(!deviceTypeTouched && selected.size){
       const types = new Set([...selected.values()].map(s => CONFIG.deviceTypeMap[s.type] || ""));
       $("DeviceType").value = types.size === 1 ? [...types][0] : "";
     }

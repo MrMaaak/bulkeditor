@@ -66,8 +66,8 @@ table.fields tr + tr th, table.fields tr + tr td{ border-top:1px solid #f0ebe2; 
 .none{ color:var(--muted); font-style:italic; }
 
 .where{ display:grid; grid-template-columns:1fr 1.15fr; gap:16px; align-items:start; }
-#mapImg{ width:100%; border:1px solid var(--line); border-radius:4px; }
-#mapBox{ width:640px; height:400px; position:absolute; left:-10000px; top:0; }
+#mapImg, #mapBox{ width:100%; aspect-ratio:16/10; border:1px solid var(--line); border-radius:4px; }
+#mapImg{ display:none; height:auto; aspect-ratio:auto; }
 
 .photos{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .photos figure{ margin:0; break-inside:avoid; }
@@ -128,10 +128,9 @@ footer.report{ margin-top:20px; padding-top:8px; border-top:1px solid var(--line
 
   <h2>Location</h2>
   <div class="where">
-    <img id="mapImg" alt="Map of where the incident happened">
+    <div><div id="mapBox"></div><img id="mapImg" alt="Map of where the incident happened"></div>
     <table class="fields"><tbody id="whereFields"></tbody></table>
   </div>
-  <div id="mapBox"></div>
 
   <div id="photosBlock">
     <h2>Photos</h2>
@@ -170,6 +169,9 @@ require([
 (async () => {
   const $ = id => document.getElementById(id);
   const status = msg => { $("statusText").innerText = msg; };
+  // Rejects if p takes longer than ms, so one slow request can't leave the page stuck on "Loading".
+  const within = (ms, p, what = "timed out") =>
+    Promise.race([p, new Promise((_, reject) => setTimeout(() => reject(new Error(what)), ms))]);
 
   // Same OAuth app as index.html / monitoring.html; its redirect URL is this site's oauth-callback.html.
   const APP_ID = "iZVrlrTESdLg7Oyj";
@@ -236,11 +238,11 @@ require([
   const layer = new FeatureLayer({ url: LAYER_URL });
   let feature;
   try {
-    await layer.load();
-    const res = await layer.queryFeatures({
+    await within(20000, layer.load(), "the incident layer didn't answer within 20 seconds");
+    const res = await within(20000, layer.queryFeatures({
       where: oid > 0 ? `OBJECTID = ${oid}` : `GlobalID = '${globalId}'`,
       outFields: ["*"], returnGeometry: true, outSpatialReference: { wkid: 4326 }
-    });
+    }), "the report query didn't answer within 20 seconds");
     feature = res.features[0];
   } catch(e) {
     status("Couldn't load the report: " + (e.message || e) + ". Check you're signed in with an account that can see incident reports.");
@@ -268,7 +270,7 @@ require([
   let fullName = "";
   if(a.Creator){
     try {
-      const u = await esriRequest(`${sharing}/rest/community/users/${encodeURIComponent(a.Creator)}`, { query: { f: "json" } });
+      const u = await within(8000, esriRequest(`${sharing}/rest/community/users/${encodeURIComponent(a.Creator)}`, { query: { f: "json" } }));
       fullName = u.data.fullName || "";
     } catch {}
   }
@@ -312,63 +314,83 @@ require([
     addRow($("fields"), "Details", p);
   }
 
-  // Location: a satellite snapshot (an image prints reliably; a live map often doesn't) and the coordinates.
+  $("printedBy").innerText = `Printed ${nz(Date.now(), { dateStyle: "medium", timeStyle: "short" })} by ${cred.userId}`;
+  $("source").innerText = `IncidentReport layer · OBJECTID ${a.OBJECTID} · ${String(a.GlobalID || "").replace(/[{}]/g, "")}`;
+  // The text is ready: show it now; the map and photos fill in below, each with a time limit.
+  $("status").style.display = "none";
+  $("sheet").style.display = "block";
+  $("printBtn").innerText = "Preparing map and photos…";
+
+  // Location: drawn as a live map, then swapped for a snapshot (an image prints reliably; a live map often doesn't).
   const g = feature.geometry;
-  if(g && Number.isFinite(g.latitude ?? g.y)){
+  const mapDone = (async () => {
+    if(!g || !Number.isFinite(g.latitude ?? g.y)){
+      $("mapBox").remove();
+      addRow($("whereFields"), "Location", "Not recorded");
+      return;
+    }
     const lat = g.latitude ?? g.y, lng = g.longitude ?? g.x;
     const link = document.createElement("a");
     link.href = `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
     link.target = "_blank";
     link.innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
     addRow($("whereFields"), "Latitude, longitude", link);
+    let view;
     try {
-      const view = new MapView({
+      view = new MapView({
         container: "mapBox",
         map: new EsriMap({ basemap: new Basemap({ baseLayers: [ new TileLayer({ url: IMAGERY }) ] }) }),
-        center: [lng, lat], zoom: 16, ui: { components: ["attribution"] }
+        center: [lng, lat], zoom: 16, constraints: { snapToZoom: false }, ui: { components: ["attribution"] }
       });
       view.graphics.add(new Graphic({
         geometry: { type: "point", longitude: lng, latitude: lat },
         symbol: { type: "simple-marker", style: "circle", size: 16, color: [224, 90, 40, 1], outline: { color: [255, 255, 255, 1], width: 2.5 } }
       }));
-      await view.when();
-      await reactiveUtils.whenOnce(() => !view.updating);
-      const shot = await view.takeScreenshot({ format: "jpg", quality: 88 });
+      await within(20000, (async () => {
+        await view.when();
+        await reactiveUtils.whenOnce(() => !view.updating);
+      })());
+      const shot = await within(10000, view.takeScreenshot({ format: "jpg", quality: 88 }));
       $("mapImg").src = shot.dataUrl;
-      view.destroy();
+      $("mapImg").style.display = "block";
+      $("mapBox").remove();
     } catch {
-      $("mapImg").remove();
+      $("mapBox").remove();   // no map rather than a half-drawn one
+    } finally {
+      view?.destroy();
     }
-  } else {
-    $("mapImg").remove();
-    addRow($("whereFields"), "Location", "Not recorded");
-  }
+  })();
 
   // Photos attached to the report.
-  try {
-    const att = await layer.queryAttachments({ objectIds: [a.OBJECTID] });
-    const list = (att[a.OBJECTID] || []).filter(x => /^image\//.test(x.contentType));
-    if(!list.length) $("photosBlock").remove();
-    await Promise.all(list.map(x => new Promise(resolve => {
-      const fig = document.createElement("figure");
-      const img = document.createElement("img");
-      img.onload = img.onerror = resolve;
-      img.alt = x.name;
-      img.src = `${x.url}?token=${encodeURIComponent(cred.token)}`;
-      const cap = document.createElement("figcaption"); cap.innerText = x.name;
-      fig.append(img, cap); $("photos").appendChild(fig);
-    })));
-  } catch {
-    $("photosBlock").remove();
-  }
+  const photosDone = (async () => {
+    try {
+      const att = await within(15000, layer.queryAttachments({ objectIds: [a.OBJECTID] }));
+      const list = (att[a.OBJECTID] || []).filter(x => /^image\//.test(x.contentType));
+      if(!list.length) $("photosBlock").remove();
+      await Promise.all(list.map(x => within(30000, new Promise(resolve => {
+        const fig = document.createElement("figure");
+        const img = document.createElement("img");
+        img.onload = img.onerror = resolve;
+        img.alt = x.name;
+        img.src = `${x.url}?token=${encodeURIComponent(cred.token)}`;
+        const cap = document.createElement("figcaption"); cap.innerText = x.name;
+        fig.append(img, cap); $("photos").appendChild(fig);
+      })).catch(() => {})));
+    } catch {
+      $("photosBlock").remove();
+    }
+  })();
 
-  $("printedBy").innerText = `Printed ${nz(Date.now(), { dateStyle: "medium", timeStyle: "short" })} by ${cred.userId}`;
-  $("source").innerText = `IncidentReport layer · OBJECTID ${a.OBJECTID} · ${String(a.GlobalID || "").replace(/[{}]/g, "")}`;
-  $("status").style.display = "none";
-  $("sheet").style.display = "block";
+  await Promise.all([mapDone, photosDone]);
+  $("printBtn").innerText = "Print / Save as PDF";
   $("printBtn").disabled = false;
   $("printBtn").onclick = () => window.print();
-})();
+})().catch(e => {
+  console.error(e);
+  document.getElementById("sheet").style.display = "none";
+  document.getElementById("status").style.display = "block";
+  document.getElementById("statusText").innerText = "Couldn't show the report: " + (e.message || e);
+});
 });
 </script>
 </body>

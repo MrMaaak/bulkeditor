@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incident report</title>
+
+<link rel="stylesheet" href="https://js.arcgis.com/4.30/esri/themes/light/main.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+<script src="https://js.arcgis.com/4.30/"></script>
+
+<!--
+  Printable incident report: incident-report.html?id=<GlobalID>  (or ?oid=<OBJECTID>)
+  Opened from the "Print report" link in the incident popup (TMT – Incident Reports Map / TMT Dashboard ›
+  Admin › Incident Reports). Shows the fields the Field Maps form shows for the report's Event Classification
+  (same rules as tmt-tasks/portal-tools/incident_popup_map.py), the location and photos; Print / Save as PDF.
+-->
+<style>
+:root{
+  --ink:#1d1a16;
+  --muted:#6f655a;
+  --line:#ddd3c3;
+  --tan:#c7b497;
+  --rust:#a4532a;
+  --paper:#ffffff;
+  --page-bg:#efe9df;
+}
+*{ box-sizing:border-box; }
+html, body{ margin:0; background:var(--page-bg); color:var(--ink); font:14px/1.45 "Inter","Segoe UI",Tahoma,sans-serif; }
+
+#toolbar{
+  position:sticky; top:0; z-index:5; display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap;
+  padding:10px 16px; background:#14110d; color:#f1e6d0;
+}
+#toolbar button{
+  font:600 14px "Inter",sans-serif; padding:9px 18px; border-radius:6px; cursor:pointer;
+  background:var(--tan); color:#14110d; border:0;
+}
+#toolbar button:disabled{ opacity:.5; cursor:default; }
+#toolbar .hint{ font-size:12px; color:#a8998a; }
+
+#status{ max-width:210mm; margin:40px auto; padding:0 16px; text-align:center; color:var(--muted); }
+#signIn{ display:none; }
+#signIn button{ margin-top:12px; font:600 14px "Inter",sans-serif; padding:10px 20px; border-radius:6px; border:0; background:var(--rust); color:#fff; cursor:pointer; }
+
+.sheet{
+  display:none; width:210mm; max-width:100%; min-height:297mm; margin:18px auto 40px; padding:16mm 16mm 14mm;
+  background:var(--paper); box-shadow:0 2px 14px rgba(0,0,0,.12);
+}
+header.report{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px; padding-bottom:10px; border-bottom:3px solid var(--rust); }
+header.report .org{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+header.report h1{ margin:2px 0 0; font-size:24px; line-height:1.2; }
+header.report .kind{ margin-top:2px; font-size:15px; font-weight:600; color:var(--rust); }
+header.report .ref{ text-align:right; font-size:12px; color:var(--muted); white-space:nowrap; }
+header.report .ref b{ display:block; font-size:16px; color:var(--ink); }
+
+.summary{ display:grid; grid-template-columns:1fr 1fr; gap:10px 24px; margin:16px 0 6px; }
+.summary div span{ display:block; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.summary div b{ font-weight:600; }
+
+h2{ margin:22px 0 8px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--rust); border-bottom:1px solid var(--line); padding-bottom:4px; }
+table.fields{ width:100%; border-collapse:collapse; }
+table.fields th{ width:34%; text-align:left; vertical-align:top; font-weight:600; padding:7px 12px 7px 0; color:var(--muted); }
+table.fields td{ padding:7px 0; white-space:pre-wrap; }
+table.fields tr + tr th, table.fields tr + tr td{ border-top:1px solid #f0ebe2; }
+.none{ color:var(--muted); font-style:italic; }
+
+.where{ display:grid; grid-template-columns:1fr 1.15fr; gap:16px; align-items:start; }
+#mapImg{ width:100%; border:1px solid var(--line); border-radius:4px; }
+#mapBox{ width:640px; height:400px; position:absolute; left:-10000px; top:0; }
+
+.photos{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.photos figure{ margin:0; break-inside:avoid; }
+.photos img{ width:100%; max-height:95mm; object-fit:contain; background:#f6f2ea; border:1px solid var(--line); border-radius:4px; }
+.photos figcaption{ font-size:11px; color:var(--muted); margin-top:2px; }
+
+.signoff{ display:grid; grid-template-columns:2fr 2fr 1fr; gap:22px; margin-top:8px; }
+.signoff div{ border-bottom:1px solid var(--ink); height:34px; }
+.signoff span{ display:block; font-size:11px; color:var(--muted); margin-top:4px; }
+.notes{ border:1px solid var(--line); border-radius:4px; height:30mm; }
+
+footer.report{ margin-top:20px; padding-top:8px; border-top:1px solid var(--line); font-size:10.5px; color:var(--muted); display:flex; justify-content:space-between; gap:12px; }
+
+@page{ size:A4; margin:12mm; }
+@media print{
+  html, body{ background:#fff; }
+  #toolbar, #status{ display:none !important; }
+  .sheet{ margin:0; padding:0; width:auto; min-height:0; box-shadow:none; }
+  h2, .signoff, .notes{ break-after:avoid; }
+  tr, .where{ break-inside:avoid; }
+  a{ color:inherit; text-decoration:none; }
+}
+@media (max-width:640px){
+  .sheet{ padding:18px 16px; }
+  .summary, .where, .photos{ grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button id="printBtn" disabled>Print / Save as PDF</button>
+  <span class="hint">For a PDF, pick “Save as PDF” as the printer.</span>
+</div>
+
+<div id="status">
+  <p id="statusText">Loading…</p>
+  <div id="signIn">
+    <p>Sign in with your TMT ArcGIS account to view this report.</p>
+    <button id="signInBtn">Sign in</button>
+  </div>
+</div>
+
+<article class="sheet" id="sheet">
+  <header class="report">
+    <div>
+      <div class="org">Tū Mai Taonga · Health &amp; Safety</div>
+      <h1>Incident report</h1>
+      <div class="kind" id="kind"></div>
+    </div>
+    <div class="ref">Report no.<b id="refNo"></b><span id="refDate"></span></div>
+  </header>
+
+  <section class="summary" id="summary"></section>
+
+  <h2>What happened</h2>
+  <table class="fields"><tbody id="fields"></tbody></table>
+
+  <h2>Location</h2>
+  <div class="where">
+    <img id="mapImg" alt="Map of where the incident happened">
+    <table class="fields"><tbody id="whereFields"></tbody></table>
+  </div>
+  <div id="mapBox"></div>
+
+  <div id="photosBlock">
+    <h2>Photos</h2>
+    <div class="photos" id="photos"></div>
+  </div>
+
+  <h2>Review</h2>
+  <div class="notes"></div>
+  <span style="display:block;font-size:11px;color:var(--muted);margin:4px 0 14px;">Follow-up and corrective actions</span>
+  <div class="signoff">
+    <div></div><div></div><div></div>
+  </div>
+  <div class="signoff" style="margin-top:0;">
+    <span>Reviewed by (name)</span><span>Signature</span><span>Date</span>
+  </div>
+
+  <footer class="report">
+    <span id="printedBy"></span>
+    <span id="source"></span>
+  </footer>
+</article>
+
+<script>
+require([
+  "esri/identity/OAuthInfo",
+  "esri/identity/IdentityManager",
+  "esri/layers/FeatureLayer",
+  "esri/layers/TileLayer",
+  "esri/Basemap",
+  "esri/Map",
+  "esri/views/MapView",
+  "esri/Graphic",
+  "esri/request",
+  "esri/core/reactiveUtils"
+], function(OAuthInfo, esriId, FeatureLayer, TileLayer, Basemap, EsriMap, MapView, Graphic, esriRequest, reactiveUtils){
+(async () => {
+  const $ = id => document.getElementById(id);
+  const status = msg => { $("statusText").innerText = msg; };
+
+  // Same OAuth app as index.html / monitoring.html; its redirect URL is this site's oauth-callback.html.
+  const APP_ID = "iZVrlrTESdLg7Oyj";
+  const PORTAL_URL = "https://www.arcgis.com";
+  const LAYER_URL = "https://services3.arcgis.com/HYKqs4HgCmzergJk/arcgis/rest/services/IncidentReport/FeatureServer/0";
+  const IMAGERY = "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer";
+
+  // The fields the Field Maps form shows for each Event Classification, in form order ("filled" = the "Other"
+  // boxes, shown whenever they have a value). Keep in step with portal-tools/incident_popup_map.py FIELDS.
+  const FIELDS = [
+    ["HazardDescription", "Hazard description", "Hazard"],
+    ["RiskAssessment", "Risk assessment", "Hazard"],
+    ["Severity", "Severity", "Injury"],
+    ["BodyParts", "Body parts affected", "Injury"],
+    ["FirstAidRequired", "First aid required", "Injury"],
+    ["EquipmentType", "Equipment type", "Equipment"],
+    ["EquipmentTypeOther", "Equipment type (other)", "filled"],
+    ["NearMissDescription", "Near miss description", "Near Miss"],
+    ["PotentialConsequences", "Potential consequences", "Near Miss"],
+    ["InjuryImmediateActions", "Immediate actions", "Injury"],
+    ["EquipmentIssueType", "Type of equipment issue", "Equipment"],
+    ["EquipmentIssueTypeOther", "Equipment issue (other)", "filled"],
+    ["EquipmentDescription", "Description of issues", "Equipment"],
+    ["EquipmentImmediateActions", "Immediate actions", "Equipment"],
+    ["ContributingFactors", "Contributing factors", "Injury"],
+    ["ContributingFactorsOther", "Contributing factors (other)", "filled"],
+    ["InjuryDescription", "Injury description", "Injury"],
+    ["NearMissImmediateActions", "Immediate actions", "Near Miss"],
+    ["HazardImmediateActions", "Immediate actions", "Hazard"],
+    ["ImmediateActionOther", "Immediate action (other)", "filled"],
+    ["Recommendation", "Preventative recommendations", "Hazard"],
+    ["TaggedOut", "Tagged out?", "Equipment"],
+    ["SuggestedFixes", "Suggested fixes", "Near Miss"],
+    ["EnvironmentalDescription", "Environmental description", "Environmental"],
+    ["AffectedArea", "Affected area", "Environmental"]
+  ];
+
+  const params = new URLSearchParams(location.search);
+  const globalId = (params.get("id") || "").replace(/[{}\s]/g, "");
+  const oid = parseInt(params.get("oid"), 10);
+  if(!/^[0-9a-f-]{36}$/i.test(globalId) && !(oid > 0)){
+    status("No report chosen. Open this page from the “Print report” link on an incident report.");
+    return;
+  }
+
+  esriId.registerOAuthInfos([ new OAuthInfo({ appId: APP_ID, portalUrl: PORTAL_URL, popup: true }) ]);
+  const sharing = PORTAL_URL + "/sharing";
+  let cred;
+  try {
+    cred = await esriId.checkSignInStatus(sharing);
+  } catch {
+    status("");
+    $("signIn").style.display = "block";
+    cred = await new Promise(resolve => {
+      $("signInBtn").onclick = async () => {
+        try { resolve(await esriId.getCredential(sharing)); }
+        catch { status("Sign-in failed or was cancelled. Please try again."); }
+      };
+    });
+    $("signIn").style.display = "none";
+  }
+  status("Loading the report…");
+
+  const layer = new FeatureLayer({ url: LAYER_URL });
+  let feature;
+  try {
+    await layer.load();
+    const res = await layer.queryFeatures({
+      where: oid > 0 ? `OBJECTID = ${oid}` : `GlobalID = '${globalId}'`,
+      outFields: ["*"], returnGeometry: true, outSpatialReference: { wkid: 4326 }
+    });
+    feature = res.features[0];
+  } catch(e) {
+    status("Couldn't load the report: " + (e.message || e) + ". Check you're signed in with an account that can see incident reports.");
+    return;
+  }
+  if(!feature){ status("That report wasn't found. It may have been deleted."); return; }
+  const a = feature.attributes;
+
+  // Coded values, and comma-separated codes from "tick all that apply", as labels.
+  const domains = {};
+  layer.fields.forEach(f => {
+    if(f.domain && f.domain.type === "coded-value"){
+      domains[f.name] = Object.fromEntries(f.domain.codedValues.map(c => [String(c.code), c.name]));
+    }
+  });
+  const label = (field, v) => {
+    if(v === null || v === undefined) return "";
+    const names = domains[field];
+    if(!names) return String(v).trim();
+    return String(v).split(",").map(p => p.trim()).filter(Boolean).map(p => names[p] || p).join(", ");
+  };
+  const nz = (ms, opts) => new Date(ms).toLocaleString("en-NZ", { timeZone: "Pacific/Auckland", ...opts });
+
+  // The reporter's full name (the layer only has the username).
+  let fullName = "";
+  if(a.Creator){
+    try {
+      const u = await esriRequest(`${sharing}/rest/community/users/${encodeURIComponent(a.Creator)}`, { query: { f: "json" } });
+      fullName = u.data.fullName || "";
+    } catch {}
+  }
+
+  const cls = label("EventClassification", a.EventClassification) || "Incident";
+  const level = label("Severity", a.Severity) || label("RiskAssessment", a.RiskAssessment);
+  const when = a.CreationDate ? nz(a.CreationDate, { dateStyle: "full", timeStyle: "short" }) : "Not recorded";
+  document.title = `Incident report ${a.OBJECTID} – ${cls}` + (fullName ? ` – ${fullName}` : "");
+  $("kind").innerText = cls + (level ? ` · ${level}` : "");
+  $("refNo").innerText = a.OBJECTID;
+  $("refDate").innerText = a.CreationDate ? nz(a.CreationDate, { dateStyle: "medium" }) : "";
+
+  const addSummary = (k, v) => {
+    const d = document.createElement("div");
+    const s = document.createElement("span"); s.innerText = k;
+    const b = document.createElement("b"); b.innerText = v || "—";
+    d.append(s, b); $("summary").appendChild(d);
+  };
+  addSummary("Reported by", fullName ? `${fullName} (${a.Creator})` : (a.Creator || "Not recorded"));
+  addSummary("Date and time", when);
+  addSummary("Event classification", cls);
+  addSummary(a.Severity ? "Severity" : "Risk assessment", level);
+
+  const addRow = (tbody, k, v) => {
+    const tr = document.createElement("tr");
+    const th = document.createElement("th"); th.innerText = k;
+    const td = document.createElement("td");
+    if(v instanceof Node) td.appendChild(v); else td.innerText = v;
+    tr.append(th, td); tbody.appendChild(tr);
+  };
+  const shownAbove = new Set(["Severity", "RiskAssessment"]);
+  let rows = 0;
+  FIELDS.forEach(([f, lbl, whenCls]) => {
+    const v = label(f, a[f]);
+    if(!v || shownAbove.has(f)) return;
+    if(whenCls !== "filled" && whenCls !== cls) return;
+    addRow($("fields"), lbl, v); rows++;
+  });
+  if(!rows){
+    const p = document.createElement("span"); p.className = "none"; p.innerText = "No details were filled in.";
+    addRow($("fields"), "Details", p);
+  }
+
+  // Location: a satellite snapshot (an image prints reliably; a live map often doesn't) and the coordinates.
+  const g = feature.geometry;
+  if(g && Number.isFinite(g.latitude ?? g.y)){
+    const lat = g.latitude ?? g.y, lng = g.longitude ?? g.x;
+    const link = document.createElement("a");
+    link.href = `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
+    link.target = "_blank";
+    link.innerText = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    addRow($("whereFields"), "Latitude, longitude", link);
+    try {
+      const view = new MapView({
+        container: "mapBox",
+        map: new EsriMap({ basemap: new Basemap({ baseLayers: [ new TileLayer({ url: IMAGERY }) ] }) }),
+        center: [lng, lat], zoom: 16, ui: { components: ["attribution"] }
+      });
+      view.graphics.add(new Graphic({
+        geometry: { type: "point", longitude: lng, latitude: lat },
+        symbol: { type: "simple-marker", style: "circle", size: 16, color: [224, 90, 40, 1], outline: { color: [255, 255, 255, 1], width: 2.5 } }
+      }));
+      await view.when();
+      await reactiveUtils.whenOnce(() => !view.updating);
+      const shot = await view.takeScreenshot({ format: "jpg", quality: 88 });
+      $("mapImg").src = shot.dataUrl;
+      view.destroy();
+    } catch {
+      $("mapImg").remove();
+    }
+  } else {
+    $("mapImg").remove();
+    addRow($("whereFields"), "Location", "Not recorded");
+  }
+
+  // Photos attached to the report.
+  try {
+    const att = await layer.queryAttachments({ objectIds: [a.OBJECTID] });
+    const list = (att[a.OBJECTID] || []).filter(x => /^image\//.test(x.contentType));
+    if(!list.length) $("photosBlock").remove();
+    await Promise.all(list.map(x => new Promise(resolve => {
+      const fig = document.createElement("figure");
+      const img = document.createElement("img");
+      img.onload = img.onerror = resolve;
+      img.alt = x.name;
+      img.src = `${x.url}?token=${encodeURIComponent(cred.token)}`;
+      const cap = document.createElement("figcaption"); cap.innerText = x.name;
+      fig.append(img, cap); $("photos").appendChild(fig);
+    })));
+  } catch {
+    $("photosBlock").remove();
+  }
+
+  $("printedBy").innerText = `Printed ${nz(Date.now(), { dateStyle: "medium", timeStyle: "short" })} by ${cred.userId}`;
+  $("source").innerText = `IncidentReport layer · OBJECTID ${a.OBJECTID} · ${String(a.GlobalID || "").replace(/[{}]/g, "")}`;
+  $("status").style.display = "none";
+  $("sheet").style.display = "block";
+  $("printBtn").disabled = false;
+  $("printBtn").onclick = () => window.print();
+})();
+});
+</script>
+</body>
+</html>

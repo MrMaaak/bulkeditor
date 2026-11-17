@@ -340,7 +340,7 @@ require([
       view = new MapView({
         container: "mapBox",
         map: new EsriMap({ basemap: new Basemap({ baseLayers: [ new TileLayer({ url: IMAGERY }) ] }) }),
-        center: [lng, lat], zoom: 16, constraints: { snapToZoom: false }, ui: { components: ["attribution"] }
+        center: [lng, lat], zoom: 13, constraints: { snapToZoom: false }, ui: { components: ["attribution"] }
       });
       view.graphics.add(new Graphic({
         geometry: { type: "point", longitude: lng, latitude: lat },
@@ -367,15 +367,23 @@ require([
       const att = await within(15000, layer.queryAttachments({ objectIds: [a.OBJECTID] }));
       const list = (att[a.OBJECTID] || []).filter(x => /^image\//.test(x.contentType));
       if(!list.length) $("photosBlock").remove();
-      await Promise.all(list.map(x => within(30000, new Promise(resolve => {
+      // Fetched through esriRequest, which adds the token the feature service expects (the portal sign-in's own
+      // token in a plain <img> URL didn't load).
+      await Promise.all(list.map(async x => {
         const fig = document.createElement("figure");
-        const img = document.createElement("img");
-        img.onload = img.onerror = resolve;
-        img.alt = x.name;
-        img.src = `${x.url}?token=${encodeURIComponent(cred.token)}`;
         const cap = document.createElement("figcaption"); cap.innerText = x.name;
-        fig.append(img, cap); $("photos").appendChild(fig);
-      })).catch(() => {})));
+        $("photos").appendChild(fig);
+        try {
+          const res = await within(30000, esriRequest(x.url, { responseType: "blob" }));
+          const img = document.createElement("img");
+          img.alt = x.name;
+          await new Promise(resolve => { img.onload = img.onerror = resolve; img.src = URL.createObjectURL(res.data); });
+          fig.append(img, cap);
+        } catch {
+          cap.innerText = `${x.name} (couldn't load this photo)`;
+          fig.append(cap);
+        }
+      }));
     } catch {
       $("photosBlock").remove();
     }
